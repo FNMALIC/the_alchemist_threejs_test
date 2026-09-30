@@ -24,8 +24,18 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
-// World
-const world = new World(scene, { oasis: OASIS, orb: { x: ORB_POSITION.x, z: ORB_POSITION.z } });
+// World. The real sky of this morning over Al-Fayoum (or ?date=YYYY-MM-DD), turned so the
+// sun rises behind the light.
+const dateParameter = new URLSearchParams(window.location.search).get('date');
+const skyDate = dateParameter ? new Date(`${dateParameter}T12:00:00Z`) : new Date();
+const world = new World(scene, {
+    oasis: OASIS,
+    orb: { x: ORB_POSITION.x, z: ORB_POSITION.z },
+    skyOptions: {
+        date: Number.isNaN(skyDate.getTime()) ? new Date() : skyDate,
+        sceneBearing: THREE.MathUtils.radToDeg(Math.atan2(ORB_POSITION.x - PLAYER_START.x, PLAYER_START.z - ORB_POSITION.z))
+    }
+});
 
 // The orb, and the warm light it casts on the sand around it
 const orb = new Orb(ORB_POSITION);
@@ -40,7 +50,8 @@ const player = new Player(camera, document.body, {
     bounds: world.terrain.bounds()
 });
 player.placeOnGround();
-const startDistance = camera.position.distanceTo(orb.position);
+let distanceWalked = 0;
+const lastPosition = camera.position.clone();
 const audio = new AmbientAudio(`${import.meta.env.BASE_URL}ambient.mp3`);
 const effects = new Effects(scene, camera);
 
@@ -61,8 +72,9 @@ const storyState = {
     effects,
     storyText,
     ui,
-    lights: { ...world.lights, orb: orbLight },
-    distanceToOrb: startDistance,
+    lights: { orb: orbLight },
+    distanceToOrb: camera.position.distanceTo(orb.position),
+    sky: world.sky,
     distanceFromStart: 0
 };
 const story = new StoryDirector(createStages(storyState), 'intro');
@@ -103,6 +115,8 @@ function animate() {
     const elapsed = clock.elapsedTime;
 
     player.update(delta);
+    distanceWalked += Math.hypot(camera.position.x - lastPosition.x, camera.position.z - lastPosition.z);
+    lastPosition.copy(camera.position);
 
     storyState.distanceToOrb = camera.position.distanceTo(orb.position);
     storyState.distanceFromStart = Math.hypot(camera.position.x - PLAYER_START.x, camera.position.z - PLAYER_START.z);
@@ -110,14 +124,13 @@ function animate() {
         const proximity = Math.max(0, 1 - (storyState.distanceToOrb / PROXIMITY_RANGE));
         orb.setProximity(proximity, elapsed);
         audio.setProximity(proximity);
-        world.setJourneyProgress(Math.max(0, 1 - storyState.distanceToOrb / startDistance));
     }
     orb.update(delta, elapsed, audio.getFrequencyData());
 
     story.update(delta);
     storyText.update(delta);
     effects.update(delta);
-    world.update(delta, elapsed, camera);
+    world.update(delta, elapsed, camera, distanceWalked);
 
     renderer.render(scene, camera);
 }

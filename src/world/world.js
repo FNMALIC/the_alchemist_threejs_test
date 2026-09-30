@@ -1,19 +1,20 @@
-// world.js - The desert at night: terrain, sky, the oasis, scattered rocks and shrubs, drifting sand
+// world.js - The desert before dawn: terrain, the real sky, the oasis, scattered rocks and shrubs, drifting sand
 import * as THREE from 'three';
 import { Terrain } from './terrain.js';
-import { Sky, HORIZON_COLOR, MOON_DIRECTION } from './sky.js';
+import { Sky } from './sky.js';
 import { Dust } from './dust.js';
 import {
     createOldTree, createPalm, createShrub, createRock, createGrassPatch, createFlower
 } from './props.js';
 
-// Fog is thick at the oasis and thins as you near the light
+// Night mist is thick at the start and lifts as dawn comes
 const FOG_DENSITY_START = 0.012;
 const FOG_DENSITY_END = 0.006;
 
 export class World {
     // oasis: { x, z, poolX, poolZ }, orb: { x, z }
-    constructor(scene, { oasis, orb }) {
+    // skyOptions: { sceneBearing, date } passed to the Sky (see sky.js)
+    constructor(scene, { oasis, orb, skyOptions }) {
         this.scene = scene;
         this.oasis = oasis;
         this.orb = orb;
@@ -23,31 +24,21 @@ export class World {
         this.heightAt = (x, z) => this.terrain.heightAt(x, z);
         scene.add(this.terrain.mesh);
 
-        this.sky = new Sky();
+        this.sky = new Sky(skyOptions);
         scene.add(this.sky.group);
 
-        scene.fog = new THREE.FogExp2(HORIZON_COLOR, FOG_DENSITY_START);
-        scene.background = HORIZON_COLOR;
+        // Fog and background take the sky's horizon colour, so distant dunes melt into it
+        scene.fog = new THREE.FogExp2(this.sky.horizonColor, FOG_DENSITY_START);
+        scene.background = this.sky.horizonColor;
 
-        this.lights = this.createLights();
+        this.lights = this.sky.lights;
+        Object.values(this.lights).forEach(light => scene.add(light));
 
         this.createOasis();
         this.createDesert();
 
         this.dust = new Dust();
         scene.add(this.dust.points);
-    }
-
-    createLights() {
-        // Cool moonlight from above, faint warm bounce from the sand
-        const hemisphere = new THREE.HemisphereLight(0x5566aa, 0x2a2018, 0.9);
-        this.scene.add(hemisphere);
-
-        const moon = new THREE.DirectionalLight(0xaabbff, 1.2);
-        moon.position.copy(MOON_DIRECTION).multiplyScalar(100);
-        this.scene.add(moon);
-
-        return { hemisphere, moon };
     }
 
     add(object) {
@@ -137,13 +128,11 @@ export class World {
         });
     }
 
-    // progress: 0 at the oasis .. 1 at the light
-    setJourneyProgress(progress) {
-        this.scene.fog.density = THREE.MathUtils.lerp(FOG_DENSITY_START, FOG_DENSITY_END, progress);
-    }
-
-    update(delta, elapsed, camera) {
-        this.sky.update(camera);
+    // distanceWalked moves the sky from night toward sunrise
+    update(delta, elapsed, camera, distanceWalked) {
+        this.sky.update(delta, elapsed, camera, distanceWalked);
+        this.scene.fog.color.copy(this.sky.horizonColor); // Fog keeps its own copy of the colour
+        this.scene.fog.density = THREE.MathUtils.lerp(FOG_DENSITY_START, FOG_DENSITY_END, this.sky.dawnProgress);
         this.dust.update(delta, elapsed, camera);
 
         // Grass sways in the wind
