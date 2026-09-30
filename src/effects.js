@@ -2,9 +2,11 @@
 import * as THREE from 'three';
 
 export class Effects {
-    constructor(scene, camera) {
+    // groundHeightAt(x, z): so falling sparks can land and bounce on the sand
+    constructor(scene, camera, groundHeightAt = () => -Infinity) {
         this.scene = scene;
         this.camera = camera;
+        this.groundHeightAt = groundHeightAt;
         this.active = []; // { group, update(delta) -> true when finished }
 
         // Reused every frame by the transformation effect
@@ -67,8 +69,18 @@ export class Effects {
 
             group.children.forEach(particle => {
                 const userData = particle.userData;
-                particle.position.addScaledVector(userData.velocity, delta);
-                userData.velocity.y -= 2 * delta; // Gravity
+                const velocity = userData.velocity;
+                particle.position.addScaledVector(velocity, delta);
+                velocity.y -= 2 * delta; // Gravity
+
+                // Bounce on the sand, losing energy each time
+                const ground = this.groundHeightAt(particle.position.x, particle.position.z) + 0.03;
+                if (particle.position.y < ground) {
+                    particle.position.y = ground;
+                    velocity.y = Math.abs(velocity.y) * 0.35;
+                    velocity.x *= 0.6;
+                    velocity.z *= 0.6;
+                }
 
                 userData.life -= delta;
                 particle.material.opacity = Math.max(0, userData.life / 3);

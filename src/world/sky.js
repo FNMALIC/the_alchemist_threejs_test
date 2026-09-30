@@ -115,6 +115,8 @@ const pointFragmentShader = /* glsl */`
         float distance = length(gl_PointCoord - 0.5);
         float disc = smoothstep(0.5, 0.1, distance);
         gl_FragColor = vec4(vColor, vAlpha * disc);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
     }
 `;
 
@@ -171,12 +173,19 @@ export class Sky {
         this.lights = {
             hemisphere: new THREE.HemisphereLight(0x33406a, 0x1a1510, 0.5),
             moon: new THREE.DirectionalLight(0xaabbff, 0),
-            sun: new THREE.DirectionalLight(0xffb070, 0)
+            sun: new THREE.DirectionalLight(0xffa860, 0)
         };
+        this.shadowFocus = new THREE.Vector3();
+
+        // A copy of the dome alone, rendered into a reflection map for the water and other surfaces
+        this.environmentScene = new THREE.Scene();
+        this.environmentScene.add(new THREE.Mesh(this.group.children[0].geometry, this.group.children[0].material));
+        this.environmentAltitude = Infinity;
+        this.environmentTarget = null;
         this.nightSky = new THREE.Color(0x33406a);
         this.dawnSky = new THREE.Color(0x9fb0d8);
         this.nightGround = new THREE.Color(0x1a1510);
-        this.dawnGround = new THREE.Color(0x806040);
+        this.dawnGround = new THREE.Color(0xa07048);
 
         this.updatePositions(true);
     }
@@ -215,6 +224,8 @@ export class Sky {
                     color += glowColor * pow(towardSun, 4.0) * nearHorizon;
 
                     gl_FragColor = vec4(color, 1.0);
+                    #include <tonemapping_fragment>
+                    #include <colorspace_fragment>
                 }
             `
         });
@@ -295,7 +306,9 @@ export class Sky {
                     void main() {
                         float light = smoothstep(-0.05, 0.1, dot(normalize(vNormal), sunDirection));
                         vec3 earthshine = vec3(0.06, 0.07, 0.09);
-                        gl_FragColor = vec4(mix(earthshine, vec3(0.96, 0.94, 0.86), light), 1.0);
+                        gl_FragColor = vec4(mix(earthshine, vec3(0.96, 0.94, 0.86), light) * 1.6, 1.0);
+                        #include <tonemapping_fragment>
+                        #include <colorspace_fragment>
                     }
                 `
             })
@@ -321,6 +334,7 @@ export class Sky {
             depthWrite: false,
             fog: false
         }));
+        sun.material.color.setRGB(3, 2.4, 1.6); // Brighter than white, so the bloom catches it
         sun.scale.setScalar(120);
         return sun;
     }
@@ -390,12 +404,50 @@ export class Sky {
         hemisphere.groundColor.copy(this.nightGround).lerp(this.dawnGround, dawn);
         hemisphere.intensity = 0.5 + dawn * 0.6;
 
-        moon.position.copy(this.moonDirection).multiplyScalar(100);
         moon.intensity = 1.1 * this.moonFraction *
             THREE.MathUtils.smoothstep(this.moonAltitude, -2, 10) * (1 - dawn);
+        sun.intensity = 4 * THREE.MathUtils.smoothstep(sunAltitude, -4, 4);
 
-        sun.position.copy(this.sunDirection).multiplyScalar(100);
-        sun.intensity = 2.5 * THREE.MathUtils.smoothstep(sunAltitude, -4, 6);
+        // Lights (and their shadow area) follow the player; snapped to a grid to avoid shimmering
+        this.shadowFocus.set(Math.round(camera.position.x), 0, Math.round(camera.position.z));
+        this.shadowFocus.y = camera.position.y;
+        moon.target.position.copy(this.shadowFocus);
+        sun.target.position.copy(this.shadowFocus);
+        moon.position.copy(this.moonDirection).multiplyScalar(100).add(this.shadowFocus);
+        sun.position.copy(this.sunDirection).multiplyScalar(100).add(this.shadowFocus);
+
+        // Only the stronger of the two casts shadows
+        const sunLeads = sun.intensity > moon.intensity;
+        sun.castShadow = this.shadowsEnabled && sunLeads && sun.intensity > 0.05;
+        moon.castShadow = this.shadowsEnabled && !sunLeads && moon.intensity > 0.05;
+    }
+
+    // Soft shadows from the moon and sun, in an 80 x 80 area around the player
+    enableShadows() {
+        this.shadowsEnabled = true;
+        [this.lights.moon, this.lights.sun].forEach(light => {
+            light.shadow.mapSize.set(2048, 2048);
+            const camera = light.shadow.camera;
+            camera.left = camera.bottom = -40;
+            camera.right = camera.top = 40;
+            camera.near = 1;
+            camera.far = 250;
+            light.shadow.bias = -0.0004;
+            light.shadow.normalBias = 0.04;
+            light.shadow.radius = 3;
+        });
+    }
+
+    // Reflection map of the current sky, re-rendered whenever the sun has moved by a degree
+    updateEnvironment(renderer) {
+        if (Math.abs(this.sunAltitude - this.environmentAltitude) < 1) return null;
+        this.environmentAltitude = this.sunAltitude;
+
+        this.pmrem ??= new THREE.PMREMGenerator(renderer);
+        const previous = this.environmentTarget;
+        this.environmentTarget = this.pmrem.fromScene(this.environmentScene, 0, 1, 1000);
+        previous?.dispose();
+        return this.environmentTarget.texture;
     }
 
     // Colour the fog should use so distant dunes melt into the horizon

@@ -7,6 +7,7 @@ import { AmbientAudio } from './audio.js';
 import { Effects } from './effects.js';
 import { StoryDirector, StoryText } from './story.js';
 import { createStages } from './stages.js';
+import { Renderer, getQuality } from './render.js';
 
 // The oasis where you wake, and the light far out across the dunes
 const OASIS = { x: 0, z: 0, poolX: -7, poolZ: 1 };
@@ -20,9 +21,8 @@ const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerH
 camera.position.copy(PLAYER_START);
 camera.lookAt(ORB_POSITION.x, 2, ORB_POSITION.z);
 
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
-document.body.appendChild(renderer.domElement);
+const quality = getQuality();
+const renderer = new Renderer(scene, camera, quality);
 
 // World. The real sky of this morning over Al-Fayoum (or ?date=YYYY-MM-DD), turned so the
 // sun rises behind the light.
@@ -34,7 +34,8 @@ const world = new World(scene, {
     skyOptions: {
         date: Number.isNaN(skyDate.getTime()) ? new Date() : skyDate,
         sceneBearing: THREE.MathUtils.radToDeg(Math.atan2(ORB_POSITION.x - PLAYER_START.x, PLAYER_START.z - ORB_POSITION.z))
-    }
+    },
+    shadows: quality.shadows
 });
 
 // The orb, and the warm light it casts on the sand around it
@@ -42,18 +43,21 @@ const orb = new Orb(ORB_POSITION);
 scene.add(orb.mesh);
 
 const orbLight = new THREE.PointLight(0xffcc66, 40, 35, 2);
+orbLight.castShadow = false; // Point light shadows are expensive (six renders per frame)
 orbLight.position.copy(ORB_POSITION);
 scene.add(orbLight);
 
 const player = new Player(camera, document.body, {
     groundHeightAt: world.heightAt,
-    bounds: world.terrain.bounds()
+    bounds: world.terrain.bounds(),
+    colliders: world.colliders,
+    isUnderWater: (x, z) => world.isUnderWater(x, z)
 });
 player.placeOnGround();
 let distanceWalked = 0;
 const lastPosition = camera.position.clone();
 const audio = new AmbientAudio(`${import.meta.env.BASE_URL}ambient.mp3`);
-const effects = new Effects(scene, camera);
+const effects = new Effects(scene, camera, world.heightAt);
 
 // UI
 const ui = {
@@ -100,12 +104,6 @@ ui.volumeSlider.addEventListener('input', () => {
 
 ui.restartButton.addEventListener('click', () => window.location.reload());
 
-window.addEventListener('resize', () => {
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-});
-
 // Main loop
 const clock = new THREE.Clock();
 
@@ -131,13 +129,14 @@ function animate() {
     storyText.update(delta);
     effects.update(delta);
     world.update(delta, elapsed, camera, distanceWalked);
+    world.updateEnvironment(renderer.renderer);
 
-    renderer.render(scene, camera);
+    renderer.render();
 }
 
-renderer.setAnimationLoop(animate);
+renderer.renderer.setAnimationLoop(animate);
 
 // Dev-only handle for debugging in the browser console (stripped from production builds)
 if (import.meta.env.DEV) {
-    window.mirage = { scene, camera, player, orb, world, story, storyState, renderer };
+    window.mirage = { scene, camera, player, orb, world, story, storyState, renderer: renderer.renderer };
 }

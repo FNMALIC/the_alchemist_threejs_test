@@ -4,21 +4,27 @@ import { Terrain } from './terrain.js';
 import { Sky } from './sky.js';
 import { Dust } from './dust.js';
 import {
-    createOldTree, createPalm, createShrub, createRock, createGrassPatch, createFlower
+    createOldTree, createPalm, createShrub, createRock, createGrassPatch, createFlower, swayGrass
 } from './props.js';
 
 // Night mist is thick at the start and lifts as dawn comes
 const FOG_DENSITY_START = 0.012;
 const FOG_DENSITY_END = 0.006;
 
+// Height of the pool's surface; ground below it is under water
+export const WATER_LEVEL = -0.15;
+
 export class World {
     // oasis: { x, z, poolX, poolZ }, orb: { x, z }
     // skyOptions: { sceneBearing, date } passed to the Sky (see sky.js)
-    constructor(scene, { oasis, orb, skyOptions }) {
+    // shadows: whether the moon and sun cast shadows
+    constructor(scene, { oasis, orb, skyOptions, shadows = true }) {
         this.scene = scene;
         this.oasis = oasis;
         this.orb = orb;
         this.grassPatches = [];
+        this.palms = [];
+        this.colliders = []; // { x, z, radius } circles the player can't walk into
 
         this.terrain = new Terrain({ oasis, orb });
         this.heightAt = (x, z) => this.terrain.heightAt(x, z);
@@ -32,7 +38,12 @@ export class World {
         scene.background = this.sky.horizonColor;
 
         this.lights = this.sky.lights;
-        Object.values(this.lights).forEach(light => scene.add(light));
+        Object.values(this.lights).forEach(light => {
+            scene.add(light);
+            if (light.target) scene.add(light.target);
+        });
+        if (shadows) this.sky.enableShadows();
+        scene.environmentIntensity = 0.6;
 
         this.createOasis();
         this.createDesert();
@@ -43,7 +54,12 @@ export class World {
 
     add(object) {
         this.scene.add(object);
+        if (object.userData.collider) this.colliders.push(object.userData.collider);
         return object;
+    }
+
+    isUnderWater(x, z) {
+        return this.heightAt(x, z) < WATER_LEVEL;
     }
 
     // The oasis: the old tree, a pool, palms, grass and flowers
@@ -53,12 +69,18 @@ export class World {
 
         this.oldTree = this.add(createOldTree(ox - 4.5, oz + 3.5, heightAt));
 
-        // Pool: dark still water in the hollow
+        // Pool: still water in the hollow that mirrors the sky
         const water = new THREE.Mesh(
-            new THREE.CircleGeometry(5, 48).rotateX(-Math.PI / 2),
-            new THREE.MeshStandardMaterial({ color: 0x0a2233, roughness: 0.1, metalness: 0.6 })
+            new THREE.CircleGeometry(5.2, 48).rotateX(-Math.PI / 2),
+            new THREE.MeshStandardMaterial({
+                color: 0x0a2233,
+                roughness: 0.05,
+                metalness: 0.9,
+                envMapIntensity: 1.6
+            })
         );
-        water.position.set(poolX, -0.15, poolZ);
+        water.position.set(poolX, WATER_LEVEL, poolZ);
+        water.receiveShadow = true;
         this.add(water);
 
         // Palms around the oasis, leaving the way toward the light open
@@ -66,7 +88,7 @@ export class World {
             [-13, -1, 7], [-11, 7, 6.5], [-7, -7, 7.5], [-3, -12, 6], [7, -9, 7],
             [9, 2, 6.5], [5, 11, 7], [-8, 13, 6], [14, -3, 6], [-15, 5, 5.5]
         ];
-        palms.forEach(([x, z, height]) => this.add(createPalm(ox + x, oz + z, height, heightAt)));
+        palms.forEach(([x, z, height]) => this.palms.push(this.add(createPalm(ox + x, oz + z, height, heightAt))));
 
         // Grass and flowers along the water's edge and under the tree
         for (let i = 0; i < 6; i++) {
@@ -135,14 +157,19 @@ export class World {
         this.scene.fog.density = THREE.MathUtils.lerp(FOG_DENSITY_START, FOG_DENSITY_END, this.sky.dawnProgress);
         this.dust.update(delta, elapsed, camera);
 
-        // Grass sways in the wind
-        this.grassPatches.forEach(patch => {
-            patch.children.forEach(blade => {
-                const userData = blade.userData;
-                blade.rotation.x = userData.originalHeight *
-                    Math.sin(elapsed * userData.waveSpeed + userData.phaseOffset) *
-                    userData.waveAmplitude;
-            });
+        // Wind comes in slow gusts; grass and palm crowns bend with it
+        const gust = 0.6 + 0.4 * Math.sin(elapsed * 0.35) + 0.2 * Math.sin(elapsed * 1.3 + 1);
+        this.grassPatches.forEach(patch => swayGrass(patch, elapsed, gust));
+        this.palms.forEach(palm => {
+            const { crown, swayPhase } = palm.userData;
+            crown.rotation.x = Math.sin(elapsed * 0.9 + swayPhase) * 0.035 * gust;
+            crown.rotation.z = Math.sin(elapsed * 0.7 + swayPhase * 1.7) * 0.05 * gust;
         });
+    }
+
+    // Keep the sky's reflection map current (the renderer is needed to draw it)
+    updateEnvironment(renderer) {
+        const environment = this.sky.updateEnvironment(renderer);
+        if (environment) this.scene.environment = environment;
     }
 }

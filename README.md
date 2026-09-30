@@ -17,8 +17,10 @@ npm run build     # production build into dist/
 npm run preview   # serve the production build
 ```
 
-**Controls:** click to start, move the mouse to look around, WASD / arrow keys to walk.
-Headphones recommended.
+**Controls:** click to start, move the mouse to look around, WASD / arrow keys to walk,
+Space to jump. Headphones recommended.
+
+**Weaker device?** Add `?quality=low` to the URL to turn off bloom and shadows.
 
 **Choose a morning:** add `?date=YYYY-MM-DD` to the URL to see the sky of another day,
 e.g. `http://localhost:5173/?date=2027-01-15`.
@@ -32,9 +34,10 @@ scripts/
   build-stars.mjs     Generates src/data/stars.json from the HYG star database
 src/
   main.js             Scene setup and main loop
+  render.js           Renderer, tone mapping, shadows, bloom, quality settings
   stages.js           The stages of the journey (story text and what happens at each stage)
   story.js            Story state machine and story text overlay
-  player.js           First-person movement
+  player.js           First-person movement: slopes, wading, jumping, collisions, head bob
   orb.js              The glowing orb, its sound-reactive waves and particles
   audio.js            Music, proximity volume fade and reverb
   effects.js          One-shot particle effects (shatter, transformation)

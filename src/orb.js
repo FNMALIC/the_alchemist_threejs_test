@@ -14,6 +14,7 @@ export class Orb {
         });
         this.mesh = new THREE.Mesh(new THREE.SphereGeometry(0.5, 32, 32), this.material);
         this.mesh.position.copy(position);
+        this.baseHeight = position.y;
 
         this.waves = this.createWaves();
         this.mesh.add(this.waves);
@@ -122,6 +123,7 @@ export class Orb {
         if (!this.visible) return;
 
         this.mesh.rotation.y += 0.6 * delta;
+        this.mesh.position.y = this.baseHeight + Math.sin(elapsed * 0.8) * 0.15; // Gentle hovering
 
         // Waves react to the music
         if (frequencyData) {

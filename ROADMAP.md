@@ -60,6 +60,18 @@ The journey matters more than the destination:
 - [x] Twilight colours, fading stars, moonlight turning to warm sunlight, and mist lifting, all driven by the real sun's altitude
 - [x] The sky is turned so the sun rises behind the light; the sun comes up as you become the light
 
+## Graphics & physics pass ✅
+*Goal: the same journey, but it looks and feels more real.*
+
+- [x] ACES tone mapping, bloom (half resolution) on the light, sun and moon, capped pixel ratio
+- [x] Reflections of the sky (environment map re-rendered as dawn progresses): the pool mirrors the sky
+- [x] Sand: wind-ripple normal map, pale crests and deeper hollows, damp sand around the pool
+- [x] Soft shadows from the moon, then the sun, in an area that follows the player; dunes and palms cast long shadows at dawn
+- [x] Wind gusts: palm crowns sway; grass is instanced (one draw call per patch) and bends in the wind
+- [x] Player physics: collisions with trunks and rocks (sliding along them), slower uphill / faster downhill, wading in the pool, jumping with gravity, head bob and landing dip
+- [x] Shatter sparks bounce on the sand; the light hovers gently
+- [x] `?quality=low` turns off bloom and shadows for weaker devices
+
 ## Phase 5 — Music of the journey
 *Goal: the music tells the story of the walk.*
 
@@ -81,10 +93,8 @@ The journey matters more than the destination:
 
 ## Phase 8 — Polish
 
-- [ ] Bloom post-processing so lights actually glow
-- [ ] Tone mapping + `setPixelRatio`
 - [ ] Title screen, pause on `Esc`, subtitle/volume menu
-- [ ] Performance pass: instanced grass and flowers, target 60fps on a laptop
+- [ ] Performance pass: instanced flowers and shrubs, measure on real laptops (target 60fps)
 - [ ] Mobile fallback: touch joystick, or a "best on desktop" notice
 - [ ] Deploy (GitHub Pages / Netlify / Vercel)
 

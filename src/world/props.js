@@ -1,5 +1,6 @@
 // props.js - Things that sit on the ground: trees, palms, shrubs, rocks, grass and flowers.
 // Each function returns an Object3D positioned at (x, heightAt(x, z), z).
+// Solid props set userData.collider = { x, z, radius } so the player can't walk through them.
 import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
@@ -43,7 +44,9 @@ export function createOldTree(x, z, heightAt) {
     const { branches, tips } = growBranches(
         new THREE.Vector3(0, -0.3, 0), new THREE.Vector3(0.1, 1, 0).normalize(), 2.6, 0.45, 3, 1.6
     );
-    tree.add(new THREE.Mesh(mergeGeometries(branches), barkMaterial));
+    const wood = new THREE.Mesh(mergeGeometries(branches), barkMaterial);
+    wood.castShadow = true;
+    tree.add(wood);
 
     // Leafy clumps at the branch tips
     const clumps = tips.map(tip => {
@@ -52,9 +55,12 @@ export function createOldTree(x, z, heightAt) {
         clump.translate(tip.x, tip.y, tip.z);
         return clump;
     });
-    tree.add(new THREE.Mesh(mergeGeometries(clumps), leafMaterial));
+    const leaves = new THREE.Mesh(mergeGeometries(clumps), leafMaterial);
+    leaves.castShadow = true;
+    tree.add(leaves);
 
     tree.position.set(x, heightAt(x, z), z);
+    tree.userData.collider = { x, z, radius: 0.6 };
     return tree;
 }
 
@@ -64,6 +70,7 @@ export function createShrub(x, z, heightAt) {
         new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 1, 0), 0.35, 0.04, 2, 2.2
     );
     const shrub = new THREE.Mesh(mergeGeometries(branches), deadWoodMaterial);
+    shrub.castShadow = true;
     shrub.position.set(x, heightAt(x, z), z);
     shrub.rotation.y = Math.random() * Math.PI * 2;
     return shrub;
@@ -81,10 +88,15 @@ export function createPalm(x, z, height, heightAt) {
         new THREE.Vector3(lean.x * 0.6, height * 0.75, lean.z * 0.6),
         new THREE.Vector3(lean.x, height, lean.z)
     ]);
-    palm.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 16, 0.16, 6, false), palmTrunkMaterial));
+    const trunk = new THREE.Mesh(new THREE.TubeGeometry(curve, 16, 0.16, 6, false), palmTrunkMaterial);
+    trunk.castShadow = true;
+    palm.add(trunk);
 
-    // Arching fronds around the crown
+    // Arching fronds around the crown. The crown pivots at the top of the trunk so it can sway.
     const top = curve.getPoint(1);
+    const crown = new THREE.Group();
+    crown.position.copy(top);
+    palm.add(crown);
     const frondCount = 7 + Math.floor(Math.random() * 3);
     const fronds = [];
     for (let i = 0; i < frondCount; i++) {
@@ -101,14 +113,18 @@ export function createPalm(x, z, height, heightAt) {
             );
         }
         frond.rotateY((i / frondCount) * Math.PI * 2 + Math.random() * 0.3);
-        frond.translate(top.x, top.y, top.z);
         fronds.push(frond);
     }
     const frondGeometry = mergeGeometries(fronds);
     frondGeometry.computeVertexNormals();
-    palm.add(new THREE.Mesh(frondGeometry, frondMaterial));
+    const frondMesh = new THREE.Mesh(frondGeometry, frondMaterial);
+    frondMesh.castShadow = true;
+    crown.add(frondMesh);
 
     palm.position.set(x, heightAt(x, z), z);
+    palm.userData.collider = { x, z, radius: 0.35 };
+    palm.userData.crown = crown;
+    palm.userData.swayPhase = Math.random() * Math.PI * 2;
     return palm;
 }
 
@@ -138,42 +154,60 @@ export function createRock(x, z, size, heightAt, color = 0x7a6a58) {
     }));
     rock.position.set(x, heightAt(x, z) + size * 0.15, z);
     rock.rotation.y = Math.random() * Math.PI * 2;
+    rock.castShadow = true;
+    rock.receiveShadow = true;
+    if (size > 0.5) rock.userData.collider = { x, z, radius: size * 0.85 };
     return rock;
 }
 
-// A patch of grass blades that sway in the wind (see World.update)
-export function createGrassPatch(x, z, size, heightAt) {
-    const grass = new THREE.Group();
-    const bladeCount = Math.floor(size * 20);
+// A patch of grass blades that sway in the wind (see swayGrass).
+// All blades in a patch are one InstancedMesh: one draw call per patch.
+const bladeGeometry = new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0); // Pivot at the base
+const bladeMaterial = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, roughness: 0.9 });
 
+export function createGrassPatch(x, z, size, heightAt) {
+    const bladeCount = Math.floor(size * 20);
+    const grass = new THREE.InstancedMesh(bladeGeometry, bladeMaterial, bladeCount);
+    grass.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    grass.receiveShadow = true;
+
+    const blades = [];
+    const color = new THREE.Color();
     for (let i = 0; i < bladeCount; i++) {
         const bladeX = x + (Math.random() - 0.5) * size;
         const bladeZ = z + (Math.random() - 0.5) * size;
-        const height = 0.2 + Math.random() * 0.3;
-        const width = 0.02 + Math.random() * 0.03;
-
-        const color = new THREE.Color().setHSL(
+        blades.push({
+            position: new THREE.Vector3(bladeX, heightAt(bladeX, bladeZ), bladeZ),
+            scale: new THREE.Vector3(0.02 + Math.random() * 0.03, 0.2 + Math.random() * 0.3, 1),
+            turn: Math.random() * Math.PI,
+            waveSpeed: 0.5 + Math.random() * 0.5,
+            waveAmplitude: 0.1 + Math.random() * 0.15,
+            phaseOffset: Math.random() * Math.PI * 2
+        });
+        grass.setColorAt(i, color.setHSL(
             0.22 + Math.random() * 0.1,
             0.4 + Math.random() * 0.3,
             0.25 + Math.random() * 0.2
-        );
-        const blade = new THREE.Mesh(
-            new THREE.PlaneGeometry(width, height),
-            new THREE.MeshStandardMaterial({ color, side: THREE.DoubleSide })
-        );
-
-        blade.position.set(bladeX, heightAt(bladeX, bladeZ) + height / 2, bladeZ);
-        blade.rotation.y = Math.random() * Math.PI;
-        blade.userData = {
-            originalHeight: height,
-            waveSpeed: 0.5 + Math.random() * 0.5,
-            waveAmplitude: 0.05 + Math.random() * 0.05,
-            phaseOffset: Math.random() * Math.PI * 2
-        };
-        grass.add(blade);
+        ));
     }
-
+    grass.userData.blades = blades;
+    swayGrass(grass, 0, 1);
     return grass;
+}
+
+const swayRotation = new THREE.Euler();
+const swayQuaternion = new THREE.Quaternion();
+const swayMatrix = new THREE.Matrix4();
+
+// Bend each blade in the wind. gust: 0 (still) .. 1+ (windy)
+export function swayGrass(grass, elapsed, gust) {
+    grass.userData.blades.forEach((blade, i) => {
+        const bend = Math.sin(elapsed * blade.waveSpeed * 2 + blade.phaseOffset) * blade.waveAmplitude * gust;
+        swayRotation.set(bend, blade.turn, bend * 0.4, 'YXZ');
+        swayQuaternion.setFromEuler(swayRotation);
+        grass.setMatrixAt(i, swayMatrix.compose(blade.position, swayQuaternion, blade.scale));
+    });
+    grass.instanceMatrix.needsUpdate = true;
 }
 
 export function createFlower(x, z, heightAt) {

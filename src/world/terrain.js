@@ -57,14 +57,50 @@ export class Terrain {
             positions.setY(i, this.heightAt(positions.getX(i), positions.getZ(i)));
         }
         geometry.computeVertexNormals();
+        geometry.setAttribute('color', this.createSandColors(geometry));
+
+        const ripples = createRippleNormalMap();
+        ripples.repeat.set(this.size / 4, this.size / 4); // One tile of ripples every 4 units
 
         const material = new THREE.MeshStandardMaterial({
-            color: 0xd9b98a,
-            roughness: 1,
-            metalness: 0
+            vertexColors: true,
+            roughness: 0.95,
+            metalness: 0,
+            normalMap: ripples,
+            normalScale: new THREE.Vector2(0.4, 0.4)
         });
 
-        return new THREE.Mesh(geometry, material);
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.receiveShadow = true;
+        mesh.castShadow = true; // Dunes throw long shadows when the sun is low
+        return mesh;
+    }
+
+    // Sand colour: pale on the crests, deeper in the hollows and on steep faces, damp near the pool
+    createSandColors(geometry) {
+        const positions = geometry.attributes.position;
+        const normals = geometry.attributes.normal;
+        const colors = new Float32Array(positions.count * 3);
+        const trough = new THREE.Color(0xc29d6c);
+        const crest = new THREE.Color(0xe8d0a6);
+        const damp = new THREE.Color(0x6f5c45);
+        const color = new THREE.Color();
+
+        for (let i = 0; i < positions.count; i++) {
+            const x = positions.getX(i);
+            const z = positions.getZ(i);
+            const height = positions.getY(i);
+
+            color.copy(trough).lerp(crest, THREE.MathUtils.clamp(height / 7, 0, 1));
+            color.multiplyScalar(0.8 + 0.2 * normals.getY(i)); // Steeper faces a little darker
+
+            const fromPool = Math.hypot(x - this.oasis.poolX, z - this.oasis.poolZ);
+            color.lerp(damp, 1 - smoothstep(5, 8, fromPool));
+
+            color.toArray(colors, i * 3);
+        }
+
+        return new THREE.BufferAttribute(colors, 3);
     }
 
     // Where the player may walk: the terrain minus a margin, so the edge stays hidden in the fog
@@ -77,4 +113,47 @@ export class Terrain {
             maxZ: this.center.z + half
         };
     }
+}
+
+// Tileable normal map of wind ripples: sharp crests, soft troughs, gently wavering lines
+function createRippleNormalMap(size = 256) {
+    const TAU = Math.PI * 2;
+    const heights = new Float32Array(size * size);
+    for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+            const u = x / size;
+            const v = y / size;
+            // Integer frequencies only, so the tile repeats seamlessly
+            const warp = 0.06 * Math.sin(TAU * (2 * v + 0.3)) + 0.04 * Math.sin(TAU * (3 * u + v)) +
+                0.02 * Math.sin(TAU * (5 * v - 2 * u));
+            const phase = TAU * (8 * u + warp * 2.5); // Long, gently wavering lines
+            const wave = 0.5 + 0.5 * Math.sin(phase);
+            heights[y * size + x] = Math.pow(wave, 2.5);
+        }
+    }
+
+    const data = new Uint8Array(size * size * 4);
+    const at = (x, y) => heights[((y + size) % size) * size + ((x + size) % size)];
+    const strength = 2.5;
+    for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+            const dx = (at(x + 1, y) - at(x - 1, y)) * strength;
+            const dy = (at(x, y + 1) - at(x, y - 1)) * strength;
+            const length = Math.hypot(dx, dy, 1);
+            const index = (y * size + x) * 4;
+            data[index] = ((-dx / length) * 0.5 + 0.5) * 255;
+            data[index + 1] = ((-dy / length) * 0.5 + 0.5) * 255;
+            data[index + 2] = ((1 / length) * 0.5 + 0.5) * 255;
+            data[index + 3] = 255;
+        }
+    }
+
+    const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.generateMipmaps = true;
+    texture.anisotropy = 4;
+    texture.needsUpdate = true;
+    return texture;
 }
