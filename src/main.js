@@ -4,6 +4,7 @@ import { World } from './world/world.js';
 import { Player } from './player.js';
 import { Orb } from './orb.js';
 import { AmbientAudio } from './audio.js';
+import { Footsteps } from './footsteps.js';
 import { Effects } from './effects.js';
 import { StoryDirector, StoryText } from './story.js';
 import { createStages } from './stages.js';
@@ -57,6 +58,9 @@ player.placeOnGround();
 let distanceWalked = 0;
 const lastPosition = camera.position.clone();
 const audio = new AmbientAudio(`${import.meta.env.BASE_URL}ambient.mp3`);
+const footsteps = new Footsteps(audio);
+player.onStep = (surface, intensity) => footsteps.step(surface, intensity);
+player.onLand = strength => footsteps.land(strength);
 const effects = new Effects(scene, camera, world.heightAt);
 
 // UI

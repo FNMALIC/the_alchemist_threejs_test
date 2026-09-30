@@ -27,7 +27,7 @@ const DOWNHILL_SPEEDUP = 0.35; // Speed gained per unit of slope when going down
 const WADING_SPEED = 0.5; // Fraction of normal speed in the pool
 
 const BOB_HEIGHT = 0.045; // Head bob while walking
-const BOB_STEPS_PER_UNIT = 0.9; // Steps per unit walked
+const BOB_STEPS_PER_UNIT = 0.65; // Steps per unit walked (about 2 steps a second at walking pace)
 
 export class Player {
     // groundHeightAt(x, z): terrain height; bounds: { minX, maxX, minZ, maxZ } the player stays within
@@ -52,6 +52,10 @@ export class Player {
         this.landingDip = 0;
         this.wading = false;
 
+        // Sound hooks: onStep(surface, intensity) each time a foot lands, onLand(strength) after a jump
+        this.onStep = null;
+        this.onLand = null;
+
         document.addEventListener('keydown', event => {
             this.setKey(event.code, true);
             if (event.code === 'Space') this.jump();
@@ -73,7 +77,8 @@ export class Player {
     }
 
     jump() {
-        if (!this.controls.isLocked || !this.grounded || this.wading) return;
+        const { x, z } = this.camera.position;
+        if (!this.controls.isLocked || !this.grounded || this.isUnderWater(x, z)) return; // No jumping out of water
         this.verticalSpeed = JUMP_SPEED;
         this.grounded = false;
     }
@@ -126,8 +131,7 @@ export class Player {
             let speed = slope > 0 ? 1 - slope * UPHILL_SLOWDOWN : 1 - slope * DOWNHILL_SPEEDUP;
             speed = THREE.MathUtils.clamp(speed, 0.35, 1.25);
 
-            this.wading = this.isUnderWater(position.x, position.z);
-            if (this.wading) speed *= WADING_SPEED;
+            if (this.isUnderWater(position.x, position.z)) speed *= WADING_SPEED;
 
             position.x = before.x + stepX * speed;
             position.z = before.z + stepZ * speed;
@@ -161,6 +165,7 @@ export class Player {
     fall(delta) {
         const position = this.camera.position;
         const groundEye = this.groundHeightAt(position.x, position.z) + EYE_HEIGHT;
+        this.wading = this.grounded && this.isUnderWater(position.x, position.z);
 
         if (this.grounded) {
             // Smoothly follow the ground, smoothing out small bumps
@@ -173,6 +178,7 @@ export class Player {
         if (position.y <= groundEye) {
             // Land softly: a small dip, stronger the faster we came down
             this.landingDip = Math.min(0.25, -this.verticalSpeed * 0.04);
+            this.onLand?.(Math.min(1, -this.verticalSpeed / 8));
             position.y = groundEye;
             this.verticalSpeed = 0;
             this.grounded = true;
@@ -184,9 +190,15 @@ export class Player {
         this.eye.copy(this.camera.position);
 
         const walked = this.grounded ? (this.walkedThisFrame || 0) : 0;
+        const previousStep = Math.floor(this.stepPhase / Math.PI);
         this.stepPhase += walked * BOB_STEPS_PER_UNIT * Math.PI;
         const speed = walked / Math.max(delta, 1e-4);
         const amount = Math.min(1, speed / 3);
+
+        // A foot lands at the lowest point of each bob
+        if (Math.floor(this.stepPhase / Math.PI) !== previousStep) {
+            this.onStep?.(this.wading ? 'water' : 'sand', amount);
+        }
 
         this.landingDip = Math.max(0, this.landingDip - delta * 1.2);
         this.camera.position.y += Math.abs(Math.sin(this.stepPhase)) * BOB_HEIGHT * amount - this.landingDip;

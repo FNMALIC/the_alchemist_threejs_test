@@ -75,6 +75,7 @@ The journey matters more than the destination:
 ## Phase 5 — Music of the journey
 *Goal: the music tells the story of the walk.*
 
+- [x] Footsteps generated in the browser: heel thump + sand crunch, alternating left/right, splashes in the pool, a thud on landing; they keep playing when the music fades near the light
 - [ ] Music layers driven by distance walked: wind alone → low drone → melody
 - [ ] A change of key at first light
 - [ ] Soft chimes near moments along the way (Phase 7)

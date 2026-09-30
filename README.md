@@ -40,6 +40,7 @@ src/
   player.js           First-person movement: slopes, wading, jumping, collisions, head bob
   orb.js              The glowing orb, its sound-reactive waves and particles
   audio.js            Music, proximity volume fade and reverb
+  footsteps.js        Footstep, splash and landing sounds, generated in the browser
   effects.js          One-shot particle effects (shatter, transformation)
   data/stars.json     5,070 naked-eye stars (generated, see below)
   world/

@@ -29,6 +29,11 @@ export class AmbientAudio {
         this.masterGain.gain.value = this.userVolume * this.proximityVolume;
         this.masterGain.connect(context.destination);
 
+        // Sound effects (footsteps) skip the proximity fade, but follow the volume slider
+        this.effectsGain = context.createGain();
+        this.effectsGain.gain.value = this.userVolume;
+        this.effectsGain.connect(context.destination);
+
         this.dryGain = context.createGain();
         this.dryGain.gain.value = 1;
 
@@ -133,9 +138,9 @@ export class AmbientAudio {
 
     applyVolume() {
         if (!this.context) return;
-        this.masterGain.gain.setTargetAtTime(
-            this.userVolume * this.proximityVolume, this.context.currentTime, 0.1
-        );
+        const now = this.context.currentTime;
+        this.masterGain.gain.setTargetAtTime(this.userVolume * this.proximityVolume, now, 0.1);
+        this.effectsGain.gain.setTargetAtTime(this.userVolume, now, 0.1);
     }
 
     swellReverb() {
