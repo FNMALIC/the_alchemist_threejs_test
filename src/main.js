@@ -52,15 +52,33 @@ const player = new Player(camera, document.body, {
     groundHeightAt: world.heightAt,
     bounds: world.terrain.bounds(),
     colliders: world.colliders,
-    isUnderWater: (x, z) => world.isUnderWater(x, z)
+    isUnderWater: (x, z) => world.isUnderWater(x, z),
+    isFirmGround: (x, z) => world.isFirmGround(x, z)
 });
 player.placeOnGround();
 let distanceWalked = 0;
 const lastPosition = camera.position.clone();
 const audio = new AmbientAudio(`${import.meta.env.BASE_URL}ambient.mp3`);
 const footsteps = new Footsteps(audio);
-player.onStep = (surface, intensity) => footsteps.step(surface, intensity);
-player.onLand = strength => footsteps.land(strength);
+
+// Every step: a sound, a footprint in the sand, and a few grains kicked back
+player.onStep = step => {
+    footsteps.step(step);
+    if (step.surface !== 'sand') return;
+    world.footprints.add(step);
+    const ground = world.heightAt(step.x, step.z);
+    const backX = -Math.sin(step.heading), backZ = -Math.cos(step.heading);
+    world.sandSpray.emit(step.x, ground, step.z, backX * 0.6, backZ * 0.6, 5 + Math.floor(step.intensity * 6), 0.9 + step.downhill);
+};
+player.onLand = strength => {
+    footsteps.land(strength);
+    const { x, z } = player.eye;
+    const ground = world.heightAt(x, z);
+    for (let i = 0; i < 8; i++) {
+        const angle = (i / 8) * Math.PI * 2;
+        world.sandSpray.emit(x, ground, z, Math.cos(angle), Math.sin(angle), 4, 1 + strength * 1.5, 0.3);
+    }
+};
 const effects = new Effects(scene, camera, world.heightAt);
 
 // UI
@@ -134,6 +152,15 @@ function animate() {
     storyText.update(delta);
     effects.update(delta);
     world.update(delta, elapsed, camera, distanceWalked);
+
+    // Sliding down a dune: a hiss of sand and a spray around the feet
+    const slideSpeed = player.slide.length();
+    footsteps.slide(slideSpeed);
+    if (slideSpeed > 0.8 && Math.random() < delta * 30) {
+        const { x, z } = player.eye;
+        const dx = player.slide.x / slideSpeed, dz = player.slide.y / slideSpeed;
+        world.sandSpray.emit(x + dx * 0.3, world.heightAt(x, z), z + dz * 0.3, dx * 0.5, dz * 0.5, 3, 0.6 + slideSpeed * 0.3, 0.9);
+    }
     world.updateEnvironment(renderer.renderer);
 
     renderer.render();

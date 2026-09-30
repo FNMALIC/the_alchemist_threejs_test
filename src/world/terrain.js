@@ -24,6 +24,8 @@ export class Terrain {
         this.orb = orb;
         this.size = size;
         this.center = { x: (oasis.x + orb.x) / 2, z: (oasis.z + orb.z) / 2 };
+        this.segments = segments;
+        this.cell = size / segments;
 
         this.mesh = this.createMesh(segments);
     }
@@ -45,6 +47,25 @@ export class Terrain {
         const poolDip = -0.6 * (1 - smoothstep(3, 6, Math.hypot(x - this.oasis.poolX, z - this.oasis.poolZ)));
 
         return dunes * oasisFlat * orbFlat * pathLow + poolDip;
+    }
+
+    // Height of the rendered ground mesh (flat triangles between grid points), for things
+    // that must sit exactly on the visible surface, like footprints
+    surfaceHeightAt(x, z) {
+        const u0 = (x - (this.center.x - this.size / 2)) / this.cell;
+        const v0 = (z - (this.center.z - this.size / 2)) / this.cell;
+        const ix = Math.floor(u0), iz = Math.floor(v0);
+        const u = u0 - ix, v = v0 - iz;
+        const x0 = this.center.x - this.size / 2 + ix * this.cell;
+        const z0 = this.center.z - this.size / 2 + iz * this.cell;
+        const a = this.heightAt(x0, z0);
+        const b = this.heightAt(x0, z0 + this.cell);
+        const c = this.heightAt(x0 + this.cell, z0 + this.cell);
+        const d = this.heightAt(x0 + this.cell, z0);
+        // Same split as PlaneGeometry: triangles (a, b, d) and (b, c, d)
+        return u + v <= 1
+            ? a + (d - a) * u + (b - a) * v
+            : c + (b - c) * (1 - u) + (d - c) * (1 - v);
     }
 
     createMesh(segments) {
@@ -70,10 +91,58 @@ export class Terrain {
             normalScale: new THREE.Vector2(0.4, 0.4)
         });
 
+        this.addGlitter(material);
+
         const mesh = new THREE.Mesh(geometry, material);
         mesh.receiveShadow = true;
         mesh.castShadow = true; // Dunes throw long shadows when the sun is low
         return mesh;
+    }
+
+    // Sand glitter (after Journey): each tiny cell of sand is a grain facet turned a random way;
+    // the few that happen to mirror the moon or sun toward the eye flash briefly as you move.
+    // World sets glitter.direction / color / strength from the brightest light every frame.
+    addGlitter(material) {
+        this.glitter = {
+            direction: { value: new THREE.Vector3(0, 1, 0) },
+            color: { value: new THREE.Color(1, 1, 1) },
+            strength: { value: 0 }
+        };
+
+        material.onBeforeCompile = shader => {
+            shader.uniforms.glitterDirection = this.glitter.direction;
+            shader.uniforms.glitterColor = this.glitter.color;
+            shader.uniforms.glitterStrength = this.glitter.strength;
+
+            shader.vertexShader = shader.vertexShader
+                .replace('#include <common>', '#include <common>\nvarying vec3 vGlitterPosition;')
+                .replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
+                    vGlitterPosition = (modelMatrix * vec4(transformed, 1.0)).xyz;`);
+
+            shader.fragmentShader = shader.fragmentShader
+                .replace('#include <common>', `#include <common>
+                    uniform vec3 glitterDirection;
+                    uniform vec3 glitterColor;
+                    uniform float glitterStrength;
+                    varying vec3 vGlitterPosition;
+                    float glitterHash(vec3 p, vec3 k) { return fract(sin(dot(p, k)) * 43758.5453); }`)
+                .replace('#include <opaque_fragment>', `{
+                    vec3 grainSpace = vGlitterPosition * 45.0; // ~2 cm grains
+                    vec3 cell = floor(grainSpace);
+                    vec2 inCell = fract(grainSpace.xz) - 0.5;
+                    float pinpoint = smoothstep(0.18, 0.0, length(inCell)); // A tiny point, not the whole cell
+                    float a = glitterHash(cell, vec3(12.9898, 78.233, 37.719));
+                    float b = glitterHash(cell, vec3(39.346, 11.135, 83.155));
+                    float c = glitterHash(cell, vec3(73.156, 52.235, 9.151));
+                    vec3 facet = normalize(vec3(a * 2.0 - 1.0, 0.8, b * 2.0 - 1.0));
+                    vec3 toEye = normalize(cameraPosition - vGlitterPosition);
+                    vec3 halfway = normalize(glitterDirection + toEye);
+                    float sparkle = pow(max(dot(facet, halfway), 0.0), 800.0) * step(0.96, c) * pinpoint;
+                    float nearby = 1.0 - smoothstep(5.0, 30.0, length(cameraPosition - vGlitterPosition));
+                    outgoingLight += glitterColor * sparkle * nearby * glitterStrength * 3.0;
+                }
+                #include <opaque_fragment>`);
+        };
     }
 
     // Sand colour: pale on the crests, deeper in the hollows and on steep faces, damp near the pool

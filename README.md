@@ -18,7 +18,7 @@ npm run preview   # serve the production build
 ```
 
 **Controls:** click to start, move the mouse to look around, WASD / arrow keys to walk,
-Space to jump. Headphones recommended.
+Shift to hurry, Space to jump. Headphones recommended.
 
 **Weaker device?** Add `?quality=low` to the URL to turn off bloom and shadows.
 
@@ -37,10 +37,11 @@ src/
   render.js           Renderer, tone mapping, shadows, bloom, quality settings
   stages.js           The stages of the journey (story text and what happens at each stage)
   story.js            Story state machine and story text overlay
-  player.js           First-person movement: slopes, wading, jumping, collisions, head bob
+  player.js           Movement and sand physics: climbing, sliding, sinking, wading, jumping, collisions
+  gait.js             Natural head motion while walking (step rhythm, sway, roll, springs)
   orb.js              The glowing orb, its sound-reactive waves and particles
   audio.js            Music, proximity volume fade and reverb
-  footsteps.js        Footstep, splash and landing sounds, generated in the browser
+  footsteps.js        Footstep (heel, roll, toe-off), splash, landing and sliding sounds, generated in the browser
   effects.js          One-shot particle effects (shatter, transformation)
   data/stars.json     5,070 naked-eye stars (generated, see below)
   world/
@@ -50,6 +51,8 @@ src/
     astronomy.js      Sky positions over Al-Fayoum, dawn times, and the walking-driven sky clock
     props.js          Old tree, palms, shrubs, rocks, grass, flowers
     dust.js           Sand drifting on the wind
+    footprints.js     Footprints left in the sand
+    sandSpray.js      Grains kicked up by steps, landings and slides
 ```
 
 In dev mode (`npm run dev`), `window.mirage` exposes the scene, camera, player, world and

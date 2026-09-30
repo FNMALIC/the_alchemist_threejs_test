@@ -1,6 +1,16 @@
-// player.js - First-person movement: walking on sand, slopes, wading, jumping and bumping into things
+// player.js - First-person movement on sand: walking and hurrying, climbing and sliding on dunes,
+// sinking a little into soft sand, wading, jumping and bumping into things.
+//
+// Sand physics (simplified):
+// - Walking on sand is hard work, and harder the steeper the climb. Near sand's angle of
+//   repose (~34°) you can hardly make progress.
+// - Sand grips like friction: undisturbed it holds up to ~34° (its angle of repose).
+//   Climbing, your feet dig in and it holds to ~30°; walking across, ~26°; running or
+//   sliding downhill loosens it, so from ~22° you start to slide, and gathering speed
+//   down a dune face is like surfing.
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls.js';
+import { Gait } from './gait.js';
 
 const KEY_BINDINGS = {
     ArrowUp: 'forward',
@@ -10,54 +20,68 @@ const KEY_BINDINGS = {
     ArrowLeft: 'left',
     KeyA: 'left',
     ArrowRight: 'right',
-    KeyD: 'right'
+    KeyD: 'right',
+    ShiftLeft: 'hurry',
+    ShiftRight: 'hurry'
 };
 
-// Walking speed settles at ACCELERATION / DAMPING units per second on flat ground
-const ACCELERATION = 30.0;
-const DAMPING = 10.0;
+const WALK_SPEED = 2.0; // m/s: an unhurried walk
+const HURRY_SPEED = 3.4; // m/s with Shift held
+const DAMPING = 8.0; // How quickly walking speed settles (higher = snappier)
 const EYE_HEIGHT = 1.7;
 const BODY_RADIUS = 0.35; // For bumping into trunks and rocks
 
-const GRAVITY = 14;
+const GRAVITY = 9.8;
 const JUMP_SPEED = 4.2;
 
-const UPHILL_SLOWDOWN = 0.9; // Speed lost per unit of slope when climbing a dune
-const DOWNHILL_SPEEDUP = 0.35; // Speed gained per unit of slope when going down
+// Sand
+const REPOSE_ANGLE = 34 * Math.PI / 180; // Steepest slope loose sand holds (static friction)
+const RESTING_FRICTION = Math.tan(REPOSE_ANGLE); // Undisturbed sand
+const CLIMBING_FRICTION = Math.tan(30 * Math.PI / 180); // Feet digging in going up
+const WALKING_FRICTION = Math.tan(26 * Math.PI / 180); // Walking across a slope
+const LOOSE_FRICTION = Math.tan(22 * Math.PI / 180); // Going down, or already sliding
+const SAND_DRAG = 0.6; // Extra slowing while sliding, per second
+const SINK_DEPTH = 0.04; // Metres the feet sink into soft sand
 const WADING_SPEED = 0.5; // Fraction of normal speed in the pool
-
-const BOB_HEIGHT = 0.035; // Head rises this much between footfalls
-const BOB_SWAY = 0.012; // Side-to-side shift of the head, one way per step
-const BOB_STEPS_PER_UNIT = 0.65; // Steps per unit walked (about 2 steps a second at walking pace)
-const LANDING_TIME = 0.12; // Seconds for the knees to absorb a landing
 
 export class Player {
     // groundHeightAt(x, z): terrain height; bounds: { minX, maxX, minZ, maxZ } the player stays within
     // colliders: [{ x, z, radius }] solid things; isUnderWater(x, z): whether a spot is in the pool
-    constructor(camera, domElement, { groundHeightAt, bounds, colliders = [], isUnderWater = () => false }) {
+    // isFirmGround(x, z): damp, packed sand that doesn't give way (e.g. around the pool)
+    constructor(camera, domElement, {
+        groundHeightAt, bounds, colliders = [], isUnderWater = () => false, isFirmGround = () => false
+    }) {
         this.camera = camera;
         this.groundHeightAt = groundHeightAt;
         this.bounds = bounds;
         this.colliders = colliders;
         this.isUnderWater = isUnderWater;
+        this.isFirmGround = isFirmGround;
         this.controls = new PointerLockControls(camera, domElement);
 
-        this.velocity = new THREE.Vector3();
+        this.velocity = new THREE.Vector3(); // Walking velocity in camera space (x: right, z: back)
         this.direction = new THREE.Vector3();
-        this.moving = { forward: false, backward: false, left: false, right: false };
+        this.slide = new THREE.Vector2(); // Sliding velocity over the ground (x, z)
+        this.moving = { forward: false, backward: false, left: false, right: false, hurry: false };
 
-        // Eye position without the head bob; the camera is placed relative to it every frame
+        // Eye position without the walking motion; the camera is placed relative to it every frame
         this.eye = camera.position.clone();
         this.verticalSpeed = 0;
         this.grounded = true;
-        this.stepPhase = 0;
-        this.bobAmount = 0; // Eases in and out as walking starts and stops
-        this.landingDepth = 0;
-        this.sinceLanding = Infinity;
-        this.sideways = new THREE.Vector3();
         this.wading = false;
+        this.sink = 0;
+        this.effort = 0; // 0..1 how hard the going is, for the gait and the footstep sounds
+        this.walkSlope = 0; // Slope along the walking direction: positive uphill
+        this.heading = new THREE.Vector2(0, -1); // Direction of travel on the ground
+        this.speed = 0; // Horizontal ground speed (m/s), walking and sliding combined
 
-        // Sound hooks: onStep(surface, intensity) each time a foot lands, onLand(strength) after a jump
+        this.gait = new Gait();
+        this.appliedRoll = 0;
+        this.sideways = new THREE.Vector3();
+        this.gradient = new THREE.Vector2();
+
+        // Hooks: onStep(step) when a foot lands, onLand(strength) after a jump
+        // step: { surface: 'sand' | 'water', intensity, foot, x, z, heading, effort, downhill }
         this.onStep = null;
         this.onLand = null;
 
@@ -72,6 +96,10 @@ export class Player {
         return this.controls.isLocked;
     }
 
+    get sliding() {
+        return this.slide.length() > 0.8;
+    }
+
     lock() {
         this.controls.lock();
     }
@@ -82,7 +110,7 @@ export class Player {
     }
 
     jump() {
-        const { x, z } = this.camera.position;
+        const { x, z } = this.eye;
         if (!this.controls.isLocked || !this.grounded || this.isUnderWater(x, z)) return; // No jumping out of water
         this.verticalSpeed = JUMP_SPEED;
         this.grounded = false;
@@ -93,62 +121,136 @@ export class Player {
         this.eye.copy(this.camera.position);
         this.eye.y = this.groundHeightAt(this.eye.x, this.eye.z) + EYE_HEIGHT;
         this.camera.position.copy(this.eye);
+        this.slide.set(0, 0);
+    }
+
+    // Slope of the ground at (x, z): gradient (rise per metre in x and z)
+    slopeAt(x, z, target = this.gradient) {
+        const e = 0.4;
+        return target.set(
+            (this.groundHeightAt(x + e, z) - this.groundHeightAt(x - e, z)) / (2 * e),
+            (this.groundHeightAt(x, z + e) - this.groundHeightAt(x, z - e)) / (2 * e)
+        );
     }
 
     update(delta) {
-        // Work from the un-bobbed eye position
+        // Work from the eye position, without last frame's walking motion
         this.camera.position.copy(this.eye);
+        this.camera.rotateZ(-this.appliedRoll);
+        this.appliedRoll = 0;
 
-        if (this.controls.isLocked) {
-            this.walk(delta);
-        }
+        const before = this.camera.position.clone();
+        const walking = this.controls.isLocked && this.walk(delta);
+        this.slideOnSand(delta, walking);
+        this.collide(this.camera.position);
+        this.keepInBounds(this.camera.position);
         this.fall(delta);
-        this.bob(delta);
+
+        const position = this.camera.position;
+        const moved = Math.hypot(position.x - before.x, position.z - before.z);
+        this.speed = moved / Math.max(delta, 1e-4);
+        if (moved > 1e-4) this.heading.set(position.x - before.x, position.z - before.z).normalize();
+
+        this.eye.copy(position);
+        this.animateHead(delta, walking);
     }
 
+    // Walking under the player's control; returns whether the player is trying to walk
     walk(delta) {
         const { velocity, direction, moving } = this;
         const position = this.camera.position;
         const before = position.clone();
 
-        // Slow down
+        const targetSpeed = moving.hurry ? HURRY_SPEED : WALK_SPEED;
+        const acceleration = targetSpeed * DAMPING;
+
         velocity.x -= velocity.x * DAMPING * delta;
         velocity.z -= velocity.z * DAMPING * delta;
 
         direction.z = Number(moving.forward) - Number(moving.backward);
         direction.x = Number(moving.right) - Number(moving.left);
         direction.normalize();
+        const trying = direction.lengthSq() > 0;
 
-        // Accelerate in the direction we're facing (only with feet on the ground)
-        const control = this.grounded ? 1 : 0.2;
-        if (moving.forward || moving.backward) velocity.z -= direction.z * ACCELERATION * control * delta;
-        if (moving.left || moving.right) velocity.x -= direction.x * ACCELERATION * control * delta;
+        // Feet only push while on the ground
+        const control = this.grounded ? 1 : 0.15;
+        if (moving.forward || moving.backward) velocity.z -= direction.z * acceleration * control * delta;
+        if (moving.left || moving.right) velocity.x -= direction.x * acceleration * control * delta;
 
         this.controls.moveRight(-velocity.x * delta);
         this.controls.moveForward(-velocity.z * delta);
 
-        // Sand is harder going uphill, a little easier downhill, and the pool slows you down
+        // How the ground slows the step
         const stepX = position.x - before.x;
         const stepZ = position.z - before.z;
         const stepLength = Math.hypot(stepX, stepZ);
+        this.effort += ((trying ? 0.15 : 0) - this.effort) * Math.min(1, delta * 3);
+        this.walkSlope = 0;
         if (stepLength > 1e-5) {
-            const slope = (this.groundHeightAt(position.x, position.z) - this.groundHeightAt(before.x, before.z)) / stepLength;
-            let speed = slope > 0 ? 1 - slope * UPHILL_SLOWDOWN : 1 - slope * DOWNHILL_SPEEDUP;
-            speed = THREE.MathUtils.clamp(speed, 0.35, 1.25);
+            const gradient = this.slopeAt(before.x, before.z);
+            // Slope along the direction of the step: positive uphill
+            const along = (gradient.x * stepX + gradient.y * stepZ) / stepLength;
+            this.walkSlope = along;
+            const angle = Math.atan(Math.abs(along));
+
+            let speed;
+            if (along > 0) {
+                // Climbing sand: gets much harder toward the angle of repose
+                const steepness = Math.min(1, angle / REPOSE_ANGLE);
+                speed = 1 - 0.85 * steepness * steepness;
+                this.effort = Math.max(this.effort, steepness);
+            } else {
+                // Going down: a little quicker, until the sand starts to slide (handled below)
+                speed = 1 + 0.2 * Math.min(1, angle / (20 * Math.PI / 180));
+            }
 
             if (this.isUnderWater(position.x, position.z)) speed *= WADING_SPEED;
+            else if (!this.isFirmGround(position.x, position.z)) speed *= 0.92; // Soft sand
 
             position.x = before.x + stepX * speed;
             position.z = before.z + stepZ * speed;
         }
 
-        this.collide(position);
+        return trying && this.grounded;
+    }
 
-        // Stay inside the world
-        position.x = THREE.MathUtils.clamp(position.x, this.bounds.minX, this.bounds.maxX);
-        position.z = THREE.MathUtils.clamp(position.z, this.bounds.minZ, this.bounds.maxZ);
+    // Sliding on sand: gravity pulls down the slope, friction and drag hold back
+    slideOnSand(delta, walking) {
+        const position = this.camera.position;
+        const slide = this.slide;
 
-        this.walkedThisFrame = Math.hypot(position.x - before.x, position.z - before.z);
+        if (!this.grounded || this.isUnderWater(position.x, position.z) || this.isFirmGround(position.x, position.z)) {
+            slide.multiplyScalar(Math.exp(-delta * 4));
+        } else {
+            const gradient = this.slopeAt(position.x, position.z);
+            const steepness = gradient.length();
+            const angle = Math.atan(steepness);
+            const cos = Math.cos(angle);
+
+            // Pull along the ground, straight down the slope
+            const pull = GRAVITY * Math.sin(angle) * cos;
+            // How well the sand holds depends on what the feet are doing to it
+            let grip = RESTING_FRICTION;
+            if (slide.length() > 0.2 || (walking && this.walkSlope < -0.15)) grip = LOOSE_FRICTION;
+            else if (walking && this.walkSlope > 0.15) grip = CLIMBING_FRICTION;
+            else if (walking) grip = WALKING_FRICTION;
+            const friction = GRAVITY * cos * cos * grip;
+
+            if (steepness > 1e-4) {
+                slide.x -= (gradient.x / steepness) * pull * delta;
+                slide.y -= (gradient.y / steepness) * pull * delta;
+            }
+
+            // Friction and drag slow the slide; they can stop it, never reverse it
+            const speed = slide.length();
+            if (speed > 0) {
+                const slowed = Math.max(0, speed - (friction + SAND_DRAG * speed) * delta);
+                slide.multiplyScalar(slowed / speed);
+            }
+        }
+
+        position.x += slide.x * delta;
+        position.z += slide.y * delta;
     }
 
     // Push the player out of any trunk or rock they walked into, so they slide along it
@@ -161,68 +263,73 @@ export class Player {
             if (distanceSquared >= minDistance * minDistance || distanceSquared === 0) continue;
 
             const distance = Math.sqrt(distanceSquared);
-            position.x = collider.x + (dx / distance) * minDistance;
-            position.z = collider.z + (dz / distance) * minDistance;
+            const nx = dx / distance;
+            const nz = dz / distance;
+            position.x = collider.x + nx * minDistance;
+            position.z = collider.z + nz * minDistance;
+
+            // Stop any sliding into the obstacle
+            const into = this.slide.x * nx + this.slide.y * nz;
+            if (into < 0) this.slide.set(this.slide.x - into * nx, this.slide.y - into * nz);
         }
+    }
+
+    keepInBounds(position) {
+        position.x = THREE.MathUtils.clamp(position.x, this.bounds.minX, this.bounds.maxX);
+        position.z = THREE.MathUtils.clamp(position.z, this.bounds.minZ, this.bounds.maxZ);
     }
 
     // Gravity: follow the dunes when on the ground, arc through the air after a jump
     fall(delta) {
         const position = this.camera.position;
-        const groundEye = this.groundHeightAt(position.x, position.z) + EYE_HEIGHT;
         this.wading = this.grounded && this.isUnderWater(position.x, position.z);
 
+        // Feet sink a little into soft sand, not into packed sand or the pool's bed
+        const soft = !this.wading && !this.isFirmGround(position.x, position.z);
+        this.sink += ((soft ? SINK_DEPTH * (1 + this.effort) : 0.01) - this.sink) * Math.min(1, delta * 4);
+        const groundEye = this.groundHeightAt(position.x, position.z) + EYE_HEIGHT - this.sink;
+
         if (this.grounded) {
-            // Smoothly follow the ground, smoothing out small bumps
-            position.y += (groundEye - position.y) * Math.min(1, delta * 10);
+            // Follow the ground, smoothing out small bumps
+            position.y += (groundEye - position.y) * Math.min(1, delta * 12);
             return;
         }
 
-        this.verticalSpeed -= GRAVITY * delta;
+        this.verticalSpeed -= GRAVITY * 1.4 * delta; // A little heavier than real, so jumps don't float
         position.y += this.verticalSpeed * delta;
         if (position.y <= groundEye) {
-            // Land softly: a small dip, stronger the faster we came down
-            this.landingDepth = Math.min(0.2, -this.verticalSpeed * 0.035);
-            this.sinceLanding = 0;
-            this.onLand?.(Math.min(1, -this.verticalSpeed / 8));
+            const strength = Math.min(1, -this.verticalSpeed / 8);
             position.y = groundEye;
             this.verticalSpeed = 0;
             this.grounded = true;
+            this.gait.impulse(0.6 + strength * 0.8); // Knees absorb the landing
+            this.onLand?.(strength);
         }
     }
 
-    // Head bob while walking and the dip after landing; applied on top of the eye position
-    bob(delta) {
-        this.eye.copy(this.camera.position);
+    // The walking motion of the head, applied on top of the eye position
+    animateHead(delta, walking) {
+        const walkSpeed = this.sliding ? 0 : this.speed;
+        const stepped = this.gait.update(delta, walkSpeed, walking && !this.sliding, this.effort);
 
-        const walked = this.grounded ? (this.walkedThisFrame || 0) : 0;
-        const previousStep = Math.floor(this.stepPhase / Math.PI);
-        this.stepPhase += walked * BOB_STEPS_PER_UNIT * Math.PI;
-        const speed = walked / Math.max(delta, 1e-4);
-
-        // Ease the bob in and out instead of switching it on and off
-        const target = Math.min(1, speed / 3);
-        this.bobAmount += (target - this.bobAmount) * Math.min(1, delta * 5);
-
-        // A foot lands at the lowest point of each bob
-        if (Math.floor(this.stepPhase / Math.PI) !== previousStep) {
-            this.onStep?.(this.wading ? 'water' : 'sand', target);
+        if (stepped) {
+            const gradient = this.slopeAt(this.eye.x, this.eye.z);
+            this.onStep?.({
+                surface: this.wading ? 'water' : 'sand',
+                intensity: Math.min(1, walkSpeed / WALK_SPEED),
+                foot: this.gait.foot,
+                x: this.eye.x,
+                z: this.eye.z,
+                heading: Math.atan2(this.heading.x, this.heading.y),
+                effort: this.effort,
+                downhill: Math.max(0, -(gradient.x * this.heading.x + gradient.y * this.heading.y))
+            });
         }
 
-        // Smooth rise and fall (sin²: no sharp corner when the foot lands)
-        const rise = Math.sin(this.stepPhase) ** 2 * BOB_HEIGHT * this.bobAmount;
-
-        // The head shifts gently over the supporting foot: left on one step, right on the next
-        const sway = Math.sin(this.stepPhase) * BOB_SWAY * this.bobAmount;
         this.sideways.set(1, 0, 0).applyQuaternion(this.camera.quaternion).setY(0).normalize();
-
-        // Landing: the knees bend and recover smoothly, deepest after LANDING_TIME
-        this.sinceLanding += delta;
-        const t = this.sinceLanding / LANDING_TIME;
-        const dip = t < 12 ? this.landingDepth * t * Math.exp(1 - t) : 0; // Fully recovered after 12 × LANDING_TIME
-
-        this.camera.position.y += rise - dip;
-        this.camera.position.addScaledVector(this.sideways, sway);
-        this.walkedThisFrame = 0;
+        this.camera.position.y += this.gait.offsetY;
+        this.camera.position.addScaledVector(this.sideways, this.gait.offsetSide);
+        this.appliedRoll = this.gait.rollAngle;
+        this.camera.rotateZ(this.appliedRoll);
     }
 }

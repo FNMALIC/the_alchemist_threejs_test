@@ -3,6 +3,8 @@ import * as THREE from 'three';
 import { Terrain } from './terrain.js';
 import { Sky } from './sky.js';
 import { Dust } from './dust.js';
+import { Footprints } from './footprints.js';
+import { SandSpray } from './sandSpray.js';
 import {
     createOldTree, createPalm, createShrub, createRock, createGrassPatch, createFlower, swayGrass
 } from './props.js';
@@ -50,6 +52,14 @@ export class World {
 
         this.dust = new Dust();
         scene.add(this.dust.points);
+
+        // The sand remembers you: footprints, and grains kicked up as you walk
+        const surfaceAt = (x, z) => this.terrain.surfaceHeightAt(x, z);
+        this.footprints = new Footprints(surfaceAt);
+        scene.add(this.footprints.mesh);
+        this.sandSpray = new SandSpray(surfaceAt);
+        scene.add(this.sandSpray.points);
+        this.glitterDirection = new THREE.Vector3();
     }
 
     add(object) {
@@ -60,6 +70,11 @@ export class World {
 
     isUnderWater(x, z) {
         return this.heightAt(x, z) < WATER_LEVEL;
+    }
+
+    // Damp, packed sand around the pool: firm underfoot, doesn't slide
+    isFirmGround(x, z) {
+        return Math.hypot(x - this.oasis.poolX, z - this.oasis.poolZ) < 8;
     }
 
     // The oasis: the old tree, a pool, palms, grass and flowers
@@ -156,6 +171,8 @@ export class World {
         this.scene.fog.color.copy(this.sky.horizonColor); // Fog keeps its own copy of the colour
         this.scene.fog.density = THREE.MathUtils.lerp(FOG_DENSITY_START, FOG_DENSITY_END, this.sky.dawnProgress);
         this.dust.update(delta, elapsed, camera);
+        this.sandSpray.update(delta);
+        this.updateGlitter();
 
         // Wind comes in slow gusts; grass and palm crowns bend with it
         const gust = 0.6 + 0.4 * Math.sin(elapsed * 0.35) + 0.2 * Math.sin(elapsed * 1.3 + 1);
@@ -165,6 +182,16 @@ export class World {
             crown.rotation.x = Math.sin(elapsed * 0.9 + swayPhase) * 0.035 * gust;
             crown.rotation.z = Math.sin(elapsed * 0.7 + swayPhase * 1.7) * 0.05 * gust;
         });
+    }
+
+    // Sand sparkles in whichever of the moon or sun is brighter
+    updateGlitter() {
+        const { moon, sun } = this.lights;
+        const light = sun.intensity > moon.intensity ? sun : moon;
+        const glitter = this.terrain.glitter;
+        glitter.direction.value.copy(light.position).sub(light.target.position).normalize();
+        glitter.color.value.copy(light.color);
+        glitter.strength.value = light.intensity;
     }
 
     // Keep the sky's reflection map current (the renderer is needed to draw it)

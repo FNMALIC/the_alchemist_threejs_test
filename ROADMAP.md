@@ -72,6 +72,17 @@ The journey matters more than the destination:
 - [x] Shatter sparks bounce on the sand; the light hovers gently
 - [x] `?quality=low` turns off bloom and shadows for weaker devices
 
+## Walking & sand physics ✅
+*Goal: walking feels human and the sand feels like sand (researched: human gait, sand biomechanics, Journey, Farnell's procedural footsteps).*
+
+- [x] Real walking pace (1.8 m/s, ~2 steps/s) and Shift to hurry (3.1 m/s, quicker steps)
+- [x] Head motion from human gait: lowest after heel strike, highest mid-step, drifting over the supporting foot with a hint of roll; driven through critically damped springs, every step slightly different
+- [x] Sand friction: undisturbed sand holds to 34° (angle of repose); feet dig in climbing (30°), loosen it going down (22°): steep faces slide, and running down a dune becomes surfing
+- [x] Climbing sand is slow and heavy near the angle of repose; feet sink a little into soft sand, not the packed sand around the pool
+- [x] Footprints left and right in the sand, on the real ground surface; grains kicked up by steps, landings and slides
+- [x] Journey-style glitter: grains flash in the moonlight and sunlight
+- [x] Footstep sound in three phases (heel, roll, toe-off), heavier uphill, skidding downhill, a hiss while sliding
+
 ## Phase 5 — Music of the journey
 *Goal: the music tells the story of the walk.*
 
@@ -80,10 +91,10 @@ The journey matters more than the destination:
 - [ ] A change of key at first light
 - [ ] Soft chimes near moments along the way (Phase 7)
 
-## Phase 6 — Footprints & the look-back ending
+## Phase 6 — The look-back ending
 *Goal: the final image is your own path, not the destination.*
 
-- [ ] Footprints left in the sand as you walk
+- [x] Footprints left in the sand as you walk
 - [ ] At the end, the story asks you to turn around; your trail glows all the way back to the oasis
 - [ ] Epilogue that reflects on *your* walk (distance, moments found), then the fade
 
