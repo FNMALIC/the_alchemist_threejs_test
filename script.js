@@ -7,9 +7,18 @@ import { Environment } from './environment.js'
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-const environment = new Environment(scene);
+// Keep vegetation away from the orb and the player's start point
+const ORB_POSITION = new THREE.Vector3(0, 1, -3);
+const PLAYER_START = new THREE.Vector3(0, 2, 5);
+const environment = new Environment(scene, {
+    clearZones: [
+        { x: ORB_POSITION.x, z: ORB_POSITION.z, radius: 2.5 },
+        { x: PLAYER_START.x, z: PLAYER_START.z, radius: 1.5 },
+        // The path between them
+        { x: (ORB_POSITION.x + PLAYER_START.x) / 2, z: (ORB_POSITION.z + PLAYER_START.z) / 2, radius: 1.5 }
+    ]
+});
 environment.init();
-environment.createVegetation();
 
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
@@ -23,6 +32,8 @@ let convolver; // For reverb effect
 let dryGainNode;
 let wetGainNode;
 let masterGainNode;
+let userVolume = 0.7; // Set by the volume slider
+let proximityVolume = 1; // Set by distance to the orb
 
 // Initialize Audio Context
 function initAudio() {
@@ -31,7 +42,7 @@ function initAudio() {
 
     // Create master gain node
     masterGainNode = audioContext.createGain();
-    masterGainNode.gain.value = 0.7; // Initial volume
+    masterGainNode.gain.value = userVolume * proximityVolume; // Initial volume
     masterGainNode.connect(audioContext.destination);
 
     // Create reverb effect
@@ -50,7 +61,9 @@ function initAudio() {
     const bufferLength = analyser.frequencyBinCount;
     dataArray = new Uint8Array(bufferLength);
 
-    // Connect nodes
+    // Connect nodes: sources -> analyser -> (dry + wet/reverb) -> master
+    analyser.connect(dryGainNode);
+    analyser.connect(wetGainNode);
     dryGainNode.connect(masterGainNode);
     wetGainNode.connect(convolver);
     convolver.connect(masterGainNode);
@@ -83,7 +96,7 @@ function createImpulseResponse() {
 
 // Load background ambient music
 function loadBackgroundMusic() {
-    fetch('ambient.mp3')
+    fetch(`${import.meta.env.BASE_URL}ambient.mp3`)
         .then(response => {
             if (!response.ok) {
                 // If ambient.mp3 doesn't exist, create oscillator instead
@@ -124,7 +137,6 @@ function createOscillatorMusic() {
 
         oscillator.connect(gainNode);
         gainNode.connect(analyser);
-        analyser.connect(dryGainNode);
 
         oscillator.start();
     });
@@ -147,7 +159,6 @@ function playBackgroundMusic(audioBuffer) {
     backgroundMusic.loop = true;
 
     backgroundMusic.connect(analyser);
-    analyser.connect(dryGainNode);
 
     backgroundMusic.start(0);
 }
@@ -157,14 +168,19 @@ function playBackgroundMusic(audioBuffer) {
 function updateAudioEffects(proximityFactor) {
     if (!audioContext) return;
 
-    // FIXED: Adjust volume to decrease as you get closer to the orb
-    const volume = 0.7 - (proximityFactor * 0.9);
-    masterGainNode.gain.setTargetAtTime(volume, audioContext.currentTime, 0.1);
+    // Volume fades out as you get closer to the orb (never below 0,
+    // which would invert the signal instead of silencing it)
+    proximityVolume = Math.max(0, 1 - proximityFactor);
+    applyMasterVolume();
 
-    // console.log(volume)
     // Adjust reverb (wet/dry mix) based on proximity
     wetGainNode.gain.setTargetAtTime(proximityFactor * 0.8, audioContext.currentTime, 0.1);
     dryGainNode.gain.setTargetAtTime(1 - (proximityFactor * 0.5), audioContext.currentTime, 0.1);
+}
+
+function applyMasterVolume() {
+    if (!audioContext) return;
+    masterGainNode.gain.setTargetAtTime(userVolume * proximityVolume, audioContext.currentTime, 0.1);
 }
 
 // Lighting
@@ -175,13 +191,6 @@ const pointLight = new THREE.PointLight(0xffcc66, 1, 10);
 pointLight.position.set(0, 3, 0);
 scene.add(pointLight);
 
-// Ground Plane
-const groundGeometry = new THREE.PlaneGeometry(20, 20);
-const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x222222, side: THREE.DoubleSide });
-const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-ground.rotation.x = -Math.PI / 2;
-scene.add(ground);
-
 // Glowing Orb (Treasure)
 const orbGeometry = new THREE.SphereGeometry(0.5, 32, 32);
 const orbMaterial = new THREE.MeshStandardMaterial({
@@ -189,7 +198,7 @@ const orbMaterial = new THREE.MeshStandardMaterial({
     emissiveIntensity: 2
 });
 const orb = new THREE.Mesh(orbGeometry, orbMaterial);
-orb.position.set(0, 1, -3); // Position it a bit away from the starting point
+orb.position.copy(ORB_POSITION); // A bit away from the starting point
 scene.add(orb);
 
 // Sound visualization waves around the orb
@@ -257,7 +266,7 @@ const orbParticles = createOrbParticles();
 orb.add(orbParticles);
 
 // Camera Position
-camera.position.set(0, 2, 5);
+camera.position.copy(PLAYER_START);
 
 // Pointer Lock Controls
 const controls = new PointerLockControls(camera, document.body);
@@ -271,7 +280,10 @@ let moveLeft = false;
 let moveRight = false;
 
 // Click to start controls and audio
-document.addEventListener('click', () => {
+document.addEventListener('click', (event) => {
+    // Let the volume slider be used without grabbing the mouse
+    if (event.target.closest('#audio-controls')) return;
+
     if (!controls.isLocked) {
         controls.lock();
 
@@ -350,10 +362,10 @@ const clock = new THREE.Clock();
 
 const volumeSlider = document.getElementById('volume-slider');
 if (volumeSlider) {
+    userVolume = Number(volumeSlider.value);
     volumeSlider.addEventListener('input', () => {
-        if (audioContext && masterGainNode) {
-            masterGainNode.gain.value = volumeSlider.value;
-        }
+        userVolume = Number(volumeSlider.value);
+        applyMasterVolume();
     });
 }
 // Handle Window Resize
@@ -510,7 +522,7 @@ function createPlayerTransformationEffect() {
     const particleCount = 300;
     const particles = new THREE.Group();
     // Tag this group to identify it in the update loop
-    particles.userData = { isTransformationEffect: true };
+    particles.userData = { isTransformationEffect: true, elapsed: 0, duration: 10 };
     scene.add(particles);
 
     const particleGeometry = new THREE.SphereGeometry(0.02, 8, 8);
@@ -672,46 +684,68 @@ function updateShatterParticles(particles, delta) {
     // Remove dead particles
     particlesToRemove.forEach(particle => {
         particles.remove(particle);
+        particle.material.dispose();
     });
 
     // Remove the group when all particles are gone
     if (particles.children.length === 0) {
-        scene.remove(particles);
+        removeEffect(particles);
     }
 }
 
+// Remove a finished particle effect and free its GPU resources
+function removeEffect(particles) {
+    const geometries = new Set();
+    particles.children.forEach(particle => {
+        geometries.add(particle.geometry);
+        particle.material.dispose();
+    });
+    geometries.forEach(geometry => geometry.dispose());
+    scene.remove(particles);
+}
+
+const cameraRight = new THREE.Vector3();
+const cameraUp = new THREE.Vector3();
+const cameraForward = new THREE.Vector3();
+
 function updateTransformationParticles(particles, delta) {
+    const effect = particles.userData;
+    effect.elapsed += delta;
+
+    // Remove the effect once it has fully expanded and faded
+    const progress = Math.min(1, effect.elapsed / effect.duration);
+    if (progress >= 1) {
+        removeEffect(particles);
+        return;
+    }
+
+    // Camera axes in world space (computed once per frame)
+    cameraRight.set(1, 0, 0).applyQuaternion(camera.quaternion);
+    cameraUp.set(0, 1, 0).applyQuaternion(camera.quaternion);
+    cameraForward.set(0, 0, -1).applyQuaternion(camera.quaternion);
+
+    // Swirl around the camera, expanding outward from 1x to 3x over the effect's lifetime
+    const expandFactor = 1 + progress * 2;
+
     particles.children.forEach(particle => {
         const userData = particle.userData;
-
-        // Swirl around the camera, gradually expanding outward
         userData.phase += 0.5 * delta * userData.speed;
-        const expandFactor = 1 + (Date.now() % 10000) / 10000; // Expand over time
 
         const radius = userData.originalRadius * expandFactor;
 
-        // Calculate new position relative to camera
-        const newX = radius * Math.sin(userData.phi) * Math.cos(userData.phase);
-        const newY = radius * Math.sin(userData.phi) * Math.sin(userData.phase);
-        const newZ = radius * Math.cos(userData.phi);
+        // Position in the camera's local space...
+        const localX = radius * Math.sin(userData.phi) * Math.cos(userData.phase);
+        const localY = radius * Math.sin(userData.phi) * Math.sin(userData.phase);
+        const localZ = radius * Math.cos(userData.phi);
 
-        // Update position (in camera's local space, then convert to world space)
-        const cameraDirection = new THREE.Vector3(0, 0, -1);
-        cameraDirection.applyQuaternion(camera.quaternion);
-
-        const cameraRight = new THREE.Vector3(1, 0, 0);
-        cameraRight.applyQuaternion(camera.quaternion);
-
-        const cameraUp = new THREE.Vector3(0, 1, 0);
-        cameraUp.applyQuaternion(camera.quaternion);
-
+        // ...converted to world space
         particle.position.copy(camera.position)
-            .add(cameraRight.multiplyScalar(newX))
-            .add(cameraUp.multiplyScalar(newY))
-            .add(cameraDirection.multiplyScalar(newZ));
+            .addScaledVector(cameraRight, localX)
+            .addScaledVector(cameraUp, localY)
+            .addScaledVector(cameraForward, localZ);
 
         // Fade out particles as they expand
-        particle.material.opacity = Math.max(0, 1 - (expandFactor - 1) / 2);
+        particle.material.opacity = 1 - progress;
     });
 }
 
@@ -719,9 +753,10 @@ function updateTransformationParticles(particles, delta) {
 function animate() {
     requestAnimationFrame(animate);
 
-    const delta = clock.getDelta();
+    // Clamp so a paused/background tab doesn't cause a huge jump
+    const delta = Math.min(clock.getDelta(), 0.1);
 
-    // Handle movement (your existing movement code)
+    // Handle movement 
     if (controls.isLocked) {
         // Slow down velocity
         velocity.x -= velocity.x * 10.0 * delta;
@@ -742,7 +777,7 @@ function animate() {
 
     // Orb animation
     if (orb.visible) {
-        orb.rotation.y += 0.01;
+        orb.rotation.y += 0.6 * delta;
     }
 
     // Calculate distance to orb for proximity effects
@@ -751,7 +786,7 @@ function animate() {
     // Update story based on proximity
     updateStory(distanceToOrb);
 
-    // Your existing orb proximity effects
+    // Orb proximity effects
     const maxDistance = 10; // Maximum distance for effects
     if (distanceToOrb < maxDistance && orb.visible) {
         const proximityFactor = 1 - (distanceToOrb / maxDistance);
@@ -793,7 +828,7 @@ function animate() {
         }
     }
 
-    // Update audio visualization (your existing code)
+    // Update audio visualization
     if (analyser && dataArray) {
         analyser.getByteFrequencyData(dataArray);
 
@@ -808,20 +843,20 @@ function animate() {
             wave.scale.set(scaleWithAudio, scaleWithAudio, scaleWithAudio);
 
             // Rotate waves based on audio
-            wave.rotation.z += 0.002 + (audioValue * 0.005);
+            wave.rotation.z += (0.12 + (audioValue * 0.3)) * delta;
 
             // Update wave opacity based on audio
             wave.material.opacity = 0.1 + (audioValue * 0.4);
         });
     }
 
-    // Animate orb particles (your existing code)
+    // Animate orb particles
     if (orb.visible) {
         orbParticles.children.forEach(particle => {
             const userData = particle.userData;
 
             // Rotate around orb center
-            userData.theta += 0.01 * userData.speed;
+            userData.theta += 0.6 * userData.speed * delta;
 
             // Move in and out slightly
             const pulseFactor = Math.sin(Date.now() * 0.001 * userData.speed) * 0.1;
@@ -833,21 +868,9 @@ function animate() {
         });
     }
 
-    // // Update any active effect particles
-    // scene.children.forEach(child => {
-    //     // Check for shatter particles
-    //     if (child.userData && child.userData.isShatterEffect) {
-    //         updateShatterParticles(child, delta);
-    //     }
-    //
-    //     // Check for transformation particles
-    //     if (child.userData && child.userData.isTransformationEffect) {
-    //         updateTransformationParticles(child, delta);
-    //     }
-    // });
-    // In your animate function, update this part:
     // Update any active effect particles
-    scene.children.forEach(child => {
+    // (iterate over a copy, since finished effects remove themselves from the scene)
+    [...scene.children].forEach(child => {
         // Check for shatter particles
         if (child.userData && child.userData.isShatterEffect) {
             updateShatterParticles(child, delta);

@@ -1,9 +1,13 @@
 // environment.js - Creates a living environment for the scene
 import * as THREE from 'three';
+import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 export class Environment {
-    constructor(scene) {
+    constructor(scene, options = {}) {
         this.scene = scene;
+        // Circles ({ x, z, radius }) that vegetation must not spawn inside,
+        // e.g. the player's start point and the orb.
+        this.clearZones = options.clearZones || [];
         this.elements = [];
         this.ambientParticles = null;
         this.floatingLights = [];
@@ -102,8 +106,6 @@ export class Environment {
             // Slightly bend the grass blade
             blade.rotation.x = (Math.random() * 0.2) - 0.1;
 
-            // Add to scene
-            this.scene.add(blade);
             grassGroup.add(blade);
 
             // Store reference for animation
@@ -116,13 +118,18 @@ export class Environment {
             };
         }
 
+        this.scene.add(grassGroup);
         this.grassPatches.push(grassGroup);
         return grassGroup;
     };
 
     // Create rock function
     createRock(x, z, size) {
-        const rockGeometry = new THREE.DodecahedronGeometry(size, 1);
+        // Merge shared corners first, so deforming them keeps the surface closed
+        let rockGeometry = new THREE.DodecahedronGeometry(size, 1);
+        rockGeometry.deleteAttribute('normal');
+        rockGeometry.deleteAttribute('uv');
+        rockGeometry = mergeVertices(rockGeometry);
 
         // Deform the rock a bit to make it look more natural
         const vertices = rockGeometry.attributes.position.array;
@@ -177,7 +184,8 @@ export class Environment {
 
         // Randomly choose between red and other colors
         let capColor;
-        if (Math.random() > 0.7) {
+        const isRed = Math.random() > 0.7;
+        if (isRed) {
             capColor = new THREE.Color(0xaa2222); // Red
         } else {
             // Random earthy tones
@@ -198,27 +206,26 @@ export class Environment {
         mushroomGroup.add(cap);
 
         // Add spots to red mushrooms
-        if (capColor.r > 0.5 && capColor.g < 0.3) {
+        if (isRed) {
             const spotCount = Math.floor(Math.random() * 5) + 3;
+            const spotMaterial = new THREE.MeshStandardMaterial({
+                color: 0xffffff,
+                roughness: 0.8
+            });
             for (let i = 0; i < spotCount; i++) {
-                const spotSize = size * (0.05 + Math.random() * 0.05);
-                const spotGeometry = new THREE.CircleGeometry(spotSize, 8);
-                const spotMaterial = new THREE.MeshBasicMaterial({
-                    color: 0xffffff,
-                    side: THREE.DoubleSide
-                });
+                const spotSize = size * (0.03 + Math.random() * 0.03);
+                const spotGeometry = new THREE.SphereGeometry(spotSize, 8, 6);
                 const spot = new THREE.Mesh(spotGeometry, spotMaterial);
 
-                // Position on cap
+                // Position on the surface of the (flattened) cap
                 const angle = Math.random() * Math.PI * 2;
-                const radius = Math.random() * capRadius * 0.7;
+                const polar = Math.random() * Math.PI * 0.35; // Keep to the upper part of the cap
                 spot.position.set(
-                    Math.cos(angle) * radius,
-                    stemHeight + 0.01,
-                    Math.sin(angle) * radius
+                    Math.sin(polar) * Math.cos(angle) * capRadius,
+                    stemHeight + Math.cos(polar) * capRadius * 0.7,
+                    Math.sin(polar) * Math.sin(angle) * capRadius
                 );
-
-                spot.rotation.x = -Math.PI / 2;
+                spot.scale.y = 0.5;
                 mushroomGroup.add(spot);
             }
         }
@@ -309,8 +316,10 @@ export class Environment {
         const vertices = groundGeometry.attributes.position.array;
         for (let i = 0; i < vertices.length; i += 3) {
             // Skip the very center area to keep it flat for gameplay
+            // PlaneGeometry lies in the XY plane; after the -90° X rotation
+            // local Y becomes world -Z and local Z becomes world Y (height).
             const x = vertices[i];
-            const z = vertices[i + 2];
+            const z = vertices[i + 1];
             const distFromCenter = Math.sqrt(x * x + z * z);
 
             if (distFromCenter > 8) {
@@ -327,7 +336,7 @@ export class Environment {
 
                 // Gradually increase height as we move away from center
                 const heightFactor = Math.min(1, (distFromCenter - 8) / 15);
-                vertices[i + 1] = totalNoise * 2 * heightFactor;
+                vertices[i + 2] = totalNoise * 2 * heightFactor;
             }
         }
 
@@ -346,9 +355,24 @@ export class Environment {
         // Create mesh and add to scene
         const ground = new THREE.Mesh(groundGeometry, groundMaterial);
         ground.rotation.x = -Math.PI / 2;
-        ground.position.y = -0.5; // Slightly below player level
+        ground.position.y = 0; // Objects are placed at y = 0
         this.scene.add(ground);
         this.elements.push(ground);
+    }
+
+    // Random point in a square area around the origin, outside all clear zones
+    randomPosition(areaSize, margin = 0) {
+        let x = 0;
+        let z = 0;
+        for (let attempt = 0; attempt < 50; attempt++) {
+            x = (Math.random() - 0.5) * areaSize;
+            z = (Math.random() - 0.5) * areaSize;
+            const blocked = this.clearZones.some(zone =>
+                Math.hypot(x - zone.x, z - zone.z) < zone.radius + margin
+            );
+            if (!blocked) break;
+        }
+        return { x, z };
     }
 
     // Create various vegetation elements
@@ -362,41 +386,37 @@ export class Environment {
         const numFlowers = 6;
 
         // Create trees
+        // Trees are large, so spread them wider and keep their foliage off the path
         for (let i = 0; i < numTrees; i++) {
-            const x = (Math.random() - 0.5) * areaSize;
-            const z = (Math.random() - 0.5) * areaSize;
+            const { x, z } = this.randomPosition(areaSize * 1.8, 2.5);
             const height = 2 + Math.random(); // Random tree height
             this.createTree(x, z, height);
         }
 
         // Create grass patches
         for (let i = 0; i < numGrassPatches; i++) {
-            const x = (Math.random() - 0.5) * areaSize;
-            const z = (Math.random() - 0.5) * areaSize;
+            const { x, z } = this.randomPosition(areaSize, 2.5);
             const size = 2 + Math.random() * 3;
             this.createGrassPatch(x, z, size);
         }
 
         // Create rocks
         for (let i = 0; i < numRocks; i++) {
-            const x = (Math.random() - 0.5) * areaSize;
-            const z = (Math.random() - 0.5) * areaSize;
+            const { x, z } = this.randomPosition(areaSize, 1);
             const size = 0.5 + Math.random();
             this.createRock(x, z, size);
         }
 
         // Create mushrooms
         for (let i = 0; i < numMushrooms; i++) {
-            const x = (Math.random() - 0.5) * areaSize;
-            const z = (Math.random() - 0.5) * areaSize;
+            const { x, z } = this.randomPosition(areaSize, 0.5);
             const size = 0.3 + Math.random() * 0.5;
             this.createMushroom(x, z, size);
         }
 
         // Create flowers
         for (let i = 0; i < numFlowers; i++) {
-            const x = (Math.random() - 0.5) * areaSize;
-            const z = (Math.random() - 0.5) * areaSize;
+            const { x, z } = this.randomPosition(areaSize, 0.2);
             this.createFlower(x, z);
         }
     }
