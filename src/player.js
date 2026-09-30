@@ -26,8 +26,10 @@ const UPHILL_SLOWDOWN = 0.9; // Speed lost per unit of slope when climbing a dun
 const DOWNHILL_SPEEDUP = 0.35; // Speed gained per unit of slope when going down
 const WADING_SPEED = 0.5; // Fraction of normal speed in the pool
 
-const BOB_HEIGHT = 0.045; // Head bob while walking
+const BOB_HEIGHT = 0.035; // Head rises this much between footfalls
+const BOB_SWAY = 0.012; // Side-to-side shift of the head, one way per step
 const BOB_STEPS_PER_UNIT = 0.65; // Steps per unit walked (about 2 steps a second at walking pace)
+const LANDING_TIME = 0.12; // Seconds for the knees to absorb a landing
 
 export class Player {
     // groundHeightAt(x, z): terrain height; bounds: { minX, maxX, minZ, maxZ } the player stays within
@@ -49,7 +51,10 @@ export class Player {
         this.verticalSpeed = 0;
         this.grounded = true;
         this.stepPhase = 0;
-        this.landingDip = 0;
+        this.bobAmount = 0; // Eases in and out as walking starts and stops
+        this.landingDepth = 0;
+        this.sinceLanding = Infinity;
+        this.sideways = new THREE.Vector3();
         this.wading = false;
 
         // Sound hooks: onStep(surface, intensity) each time a foot lands, onLand(strength) after a jump
@@ -177,7 +182,8 @@ export class Player {
         position.y += this.verticalSpeed * delta;
         if (position.y <= groundEye) {
             // Land softly: a small dip, stronger the faster we came down
-            this.landingDip = Math.min(0.25, -this.verticalSpeed * 0.04);
+            this.landingDepth = Math.min(0.2, -this.verticalSpeed * 0.035);
+            this.sinceLanding = 0;
             this.onLand?.(Math.min(1, -this.verticalSpeed / 8));
             position.y = groundEye;
             this.verticalSpeed = 0;
@@ -193,15 +199,30 @@ export class Player {
         const previousStep = Math.floor(this.stepPhase / Math.PI);
         this.stepPhase += walked * BOB_STEPS_PER_UNIT * Math.PI;
         const speed = walked / Math.max(delta, 1e-4);
-        const amount = Math.min(1, speed / 3);
+
+        // Ease the bob in and out instead of switching it on and off
+        const target = Math.min(1, speed / 3);
+        this.bobAmount += (target - this.bobAmount) * Math.min(1, delta * 5);
 
         // A foot lands at the lowest point of each bob
         if (Math.floor(this.stepPhase / Math.PI) !== previousStep) {
-            this.onStep?.(this.wading ? 'water' : 'sand', amount);
+            this.onStep?.(this.wading ? 'water' : 'sand', target);
         }
 
-        this.landingDip = Math.max(0, this.landingDip - delta * 1.2);
-        this.camera.position.y += Math.abs(Math.sin(this.stepPhase)) * BOB_HEIGHT * amount - this.landingDip;
+        // Smooth rise and fall (sin²: no sharp corner when the foot lands)
+        const rise = Math.sin(this.stepPhase) ** 2 * BOB_HEIGHT * this.bobAmount;
+
+        // The head shifts gently over the supporting foot: left on one step, right on the next
+        const sway = Math.sin(this.stepPhase) * BOB_SWAY * this.bobAmount;
+        this.sideways.set(1, 0, 0).applyQuaternion(this.camera.quaternion).setY(0).normalize();
+
+        // Landing: the knees bend and recover smoothly, deepest after LANDING_TIME
+        this.sinceLanding += delta;
+        const t = this.sinceLanding / LANDING_TIME;
+        const dip = t < 12 ? this.landingDepth * t * Math.exp(1 - t) : 0; // Fully recovered after 12 × LANDING_TIME
+
+        this.camera.position.y += rise - dip;
+        this.camera.position.addScaledVector(this.sideways, sway);
         this.walkedThisFrame = 0;
     }
 }

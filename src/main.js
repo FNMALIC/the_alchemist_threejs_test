@@ -117,8 +117,9 @@ function animate() {
     const elapsed = clock.elapsedTime;
 
     player.update(delta);
-    distanceWalked += Math.hypot(camera.position.x - lastPosition.x, camera.position.z - lastPosition.z);
-    lastPosition.copy(camera.position);
+    // Measured from the eye position, so the head's sway doesn't count as walking
+    distanceWalked += Math.hypot(player.eye.x - lastPosition.x, player.eye.z - lastPosition.z);
+    lastPosition.copy(player.eye);
 
     storyState.distanceToOrb = camera.position.distanceTo(orb.position);
     storyState.distanceFromStart = Math.hypot(camera.position.x - PLAYER_START.x, camera.position.z - PLAYER_START.z);
