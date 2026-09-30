@@ -7,6 +7,7 @@
   <style>
     body { margin: 0; overflow: hidden; background-color: black; }
     canvas { display: block; }
+
     #audio-controls {
       position: absolute;
       bottom: 20px;
@@ -22,6 +23,59 @@
       margin-left: 10px;
       width: 100px;
     }
+
+    #instructions {
+      position: absolute;
+      top: 10px;
+      width: 100%;
+      text-align: center;
+      color: white;
+      font-size: 18px;
+      pointer-events: none;
+    }
+    #instructions.hidden { display: none; }
+
+    #story {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      max-width: 600px;
+      padding: 20px;
+      border-radius: 10px;
+      background-color: rgba(0, 0, 0, 0.7);
+      color: white;
+      font-size: 24px;
+      text-align: center;
+      pointer-events: none; /* Don't block controls */
+      display: none;
+    }
+    #story.visible { display: block; }
+
+    #fade-overlay {
+      position: absolute;
+      inset: 0;
+      background-color: white;
+      opacity: 0;
+      transition: opacity 8s;
+      pointer-events: none;
+    }
+    #fade-overlay.visible { opacity: 1; }
+
+    #restart-button {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      padding: 15px 30px;
+      font-size: 20px;
+      background-color: #ffcc66;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      display: none;
+    }
+    #restart-button.visible { display: block; }
   </style>
 </head>
 <body>
@@ -29,6 +83,10 @@
   <label for="volume-slider">Volume:</label>
   <input type="range" id="volume-slider" min="0" max="1" step="0.1" value="0.7">
 </div>
-<script type="module" src="./script.js"></script>
+<div id="instructions">Click to start<br>WASD / Arrow Keys to move</div>
+<div id="story"></div>
+<div id="fade-overlay"></div>
+<button id="restart-button">Experience Again</button>
+<script type="module" src="./src/main.js"></script>
 </body>
 </html>
