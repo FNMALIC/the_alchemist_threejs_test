@@ -30,24 +30,52 @@ export class StoryDirector {
     }
 }
 
-// Shows one line of story text at a time, hiding it after a duration
+// How long the old line takes to fade out before a new one replaces it (matches the CSS)
+const SWAP_SECONDS = 0.6;
+
+// Shows one line of story text at a time, hiding it after a duration.
+// The fading in and out is done by CSS (#story / #story.visible in index.html).
 export class StoryText {
     constructor(element) {
         this.element = element;
         this.remaining = 0;
+        this.pending = null; // { text, duration } waiting for the previous line to fade out
+        this.swapTimer = 0;
     }
 
     get isShowing() {
-        return this.remaining > 0;
+        return this.remaining > 0 || this.pending !== null;
     }
 
     show(text, duration = 3) {
+        if (this.element.classList.contains('visible')) {
+            // Let the current line fade out first, then bring in the new one
+            this.element.classList.remove('visible');
+            this.pending = { text, duration };
+            this.swapTimer = SWAP_SECONDS;
+            this.remaining = 0;
+            return;
+        }
+        this.reveal(text, duration);
+    }
+
+    reveal(text, duration) {
         this.element.textContent = text;
         this.element.classList.add('visible');
         this.remaining = duration;
     }
 
     update(delta) {
+        if (this.pending) {
+            this.swapTimer -= delta;
+            if (this.swapTimer <= 0) {
+                const { text, duration } = this.pending;
+                this.pending = null;
+                this.reveal(text, duration);
+            }
+            return;
+        }
+
         if (this.remaining <= 0) return;
         this.remaining -= delta;
         if (this.remaining <= 0) {
