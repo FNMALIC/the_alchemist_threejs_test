@@ -17,6 +17,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "astronomy-engine": "^2.1.19",
     "three": "^0.174.0"
   },
   "devDependencies": {

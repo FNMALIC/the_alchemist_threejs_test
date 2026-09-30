@@ -16,7 +16,7 @@ const APPROACH_DISTANCE = 50; // From the orb
 const VERY_CLOSE_DISTANCE = 15;
 const TOUCH_DISTANCE = 2;
 
-// state: { orb, audio, effects, storyText, lights, ui, distanceToOrb, distanceFromStart }
+// state: { orb, audio, effects, storyText, lights, ui, sky, distanceToOrb, distanceFromStart }
 export function createStages(state) {
     const { orb, audio, effects, storyText, lights, ui } = state;
 
@@ -64,10 +64,9 @@ export function createStages(state) {
                 storyText.show(STORY_TEXT.transformation, 5);
                 effects.transformation();
 
-                // Dim the world for dramatic effect
-                Object.values(lights).forEach(light => {
-                    light.intensity *= 0.2;
-                });
+                // The orb's light goes out, and the sun rises
+                lights.orb.intensity *= 0.2;
+                state.sky.clock.hurry(8);
 
                 audio.swellReverb();
                 audio.playTransition();
