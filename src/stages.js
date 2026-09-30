@@ -1,43 +1,52 @@
-// stages.js - The stages of the journey, from waking in the dark to becoming the light
+// stages.js - The stages of the journey, from waking at the oasis to becoming the light
 
 const STORY_TEXT = {
-    intro: "You find yourself in a strange, dark place. In the distance, a pulsing light beckons to you...",
-    approaching: "As you draw closer, the light seems to respond to your presence. You hear faint whispers that you can't quite understand...",
+    intro: "You wake beneath an old tree at the edge of an oasis. Beyond the palms, the desert lies silver under the moon. Far away, a light is pulsing...",
+    desert: "The sand is cold beneath your feet. Behind you the oasis grows small. Ahead, the light waits.",
+    approaching: "The light seems to answer your steps. Faint whispers drift on the wind, just beyond understanding...",
     veryClose: "The light pulses faster now. The whispers grow clearer: \"Seeker... find... truth...\" The orb's energy surrounds you.",
     touch: "You reach out to touch the light. It responds to your touch, fracturing into countless shards of brilliant light!",
     transformation: "The fragments of light swirl around you, entering your body. You feel yourself becoming one with the light...",
     epilogue: "As your consciousness expands, you understand: you were the light all along, separated from yourself. You are whole again."
 };
 
-// Distances to the orb that move the story forward
-const APPROACH_DISTANCE = 6;
-const VERY_CLOSE_DISTANCE = 4;
-const TOUCH_DISTANCE = 1.5;
+// Distances that move the story forward
+const LEAVE_OASIS_DISTANCE = 20; // From the start point
+const APPROACH_DISTANCE = 50; // From the orb
+const VERY_CLOSE_DISTANCE = 15;
+const TOUCH_DISTANCE = 2;
 
-// world: { orb, audio, effects, storyText, lights, ui, distanceToOrb }
-export function createStages(world) {
-    const { orb, audio, effects, storyText, lights, ui } = world;
+// state: { orb, audio, effects, storyText, lights, ui, distanceToOrb, distanceFromStart }
+export function createStages(state) {
+    const { orb, audio, effects, storyText, lights, ui } = state;
 
     // Walking toward the orb: touching it always wins; otherwise the next
     // line of text waits until the current one has finished.
     const approachTo = (nextStage, distance) => () => {
-        if (world.distanceToOrb < TOUCH_DISTANCE) return 'touch';
-        if (!storyText.isShowing && world.distanceToOrb < distance) return nextStage;
+        if (state.distanceToOrb < TOUCH_DISTANCE) return 'touch';
+        if (!storyText.isShowing && state.distanceToOrb < distance) return nextStage;
     };
 
     return {
         intro: {
-            enter: () => storyText.show(STORY_TEXT.intro),
+            enter: () => storyText.show(STORY_TEXT.intro, 7),
+            update: () => {
+                if (!storyText.isShowing && state.distanceFromStart > LEAVE_OASIS_DISTANCE) return 'desert';
+            }
+        },
+
+        desert: {
+            enter: () => storyText.show(STORY_TEXT.desert, 5),
             update: approachTo('approaching', APPROACH_DISTANCE)
         },
 
         approaching: {
-            enter: () => storyText.show(STORY_TEXT.approaching),
+            enter: () => storyText.show(STORY_TEXT.approaching, 5),
             update: approachTo('veryClose', VERY_CLOSE_DISTANCE)
         },
 
         veryClose: {
-            enter: () => storyText.show(STORY_TEXT.veryClose),
+            enter: () => storyText.show(STORY_TEXT.veryClose, 5),
             update: approachTo(null, 0)
         },
 
@@ -56,8 +65,9 @@ export function createStages(world) {
                 effects.transformation();
 
                 // Dim the world for dramatic effect
-                lights.ambient.intensity = 0.1;
-                lights.orb.intensity = 0.2;
+                Object.values(lights).forEach(light => {
+                    light.intensity *= 0.2;
+                });
 
                 audio.swellReverb();
                 audio.playTransition();

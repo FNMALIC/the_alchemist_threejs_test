@@ -13,11 +13,17 @@ const KEY_BINDINGS = {
     KeyD: 'right'
 };
 
-const ACCELERATION = 20.0;
+// Walking speed settles at ACCELERATION / DAMPING units per second
+const ACCELERATION = 30.0;
 const DAMPING = 10.0;
+const EYE_HEIGHT = 1.7;
 
 export class Player {
-    constructor(camera, domElement) {
+    // groundHeightAt(x, z): terrain height; bounds: { minX, maxX, minZ, maxZ } the player stays within
+    constructor(camera, domElement, { groundHeightAt, bounds }) {
+        this.camera = camera;
+        this.groundHeightAt = groundHeightAt;
+        this.bounds = bounds;
         this.controls = new PointerLockControls(camera, domElement);
         this.velocity = new THREE.Vector3();
         this.direction = new THREE.Vector3();
@@ -40,6 +46,12 @@ export class Player {
         if (action) this.moving[action] = pressed;
     }
 
+    // Put the camera at eye height above the ground at its current position
+    placeOnGround() {
+        const position = this.camera.position;
+        position.y = this.groundHeightAt(position.x, position.z) + EYE_HEIGHT;
+    }
+
     update(delta) {
         if (!this.controls.isLocked) return;
 
@@ -59,5 +71,14 @@ export class Player {
 
         this.controls.moveRight(-velocity.x * delta);
         this.controls.moveForward(-velocity.z * delta);
+
+        // Stay inside the world
+        const position = this.camera.position;
+        position.x = THREE.MathUtils.clamp(position.x, this.bounds.minX, this.bounds.maxX);
+        position.z = THREE.MathUtils.clamp(position.z, this.bounds.minZ, this.bounds.maxZ);
+
+        // Follow the dunes up and down, smoothing out small bumps
+        const targetY = this.groundHeightAt(position.x, position.z) + EYE_HEIGHT;
+        position.y += (targetY - position.y) * Math.min(1, delta * 10);
     }
 }

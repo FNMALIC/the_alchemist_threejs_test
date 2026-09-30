@@ -40,17 +40,17 @@ A 5–10 minute walk with a clear shape:
 - [x] Move UI elements and styles into `index.html` / CSS
 - [x] Repo cleanup: keep one lockfile (npm), drop `package.json` `main`, stop tracking `.idea/`, write a README (how to run it, the concept, structure)
 
-## Phase 3 — Build the world (desert + oasis)
+## Phase 3 — Build the world (desert + oasis) ✅
 *Goal: the space has to be big enough for a real journey.*
 
-- [ ] Larger terrain (~400×400) with dunes from proper noise (e.g. `simplex-noise`)
-- [ ] **The oasis** (start point): the old tree, palms, a small pool. This is the "home" you'll return to
-- [ ] The orb placed far away (~150 units), faintly visible on the horizon from the start
-  (currently the orb is so close that at walking speed you reach it before the "very close" line can show)
-- [ ] Night sky: stars, moon, deep blue-to-black gradient
-- [ ] Fog that thins as you approach the orb, so the light "pulls" through the haze
-- [ ] Keep the player on the terrain surface (height lookup) and inside world bounds
-- [ ] Ambient dust particles and floating lights (as `Points` / `InstancedMesh`)
+- [x] Larger terrain (600×600) with dunes from noise (Three.js `ImprovedNoise`, so the desert is the same every time)
+- [x] **The oasis** (start point): the old tree, palms, a pool, grass and flowers. This is the "home" you'll return to
+- [x] The orb placed far away (~150 units), visible on the horizon from the start; dunes stay low along the way
+- [x] Night sky: gradient dome, stars, moon with a halo, cool moonlight
+- [x] Fog that thins as you approach the orb; the orb's glow shines through it
+- [x] Keep the player on the terrain surface and inside the world bounds
+- [x] Drifting sand particles, dry shrubs, scattered stones and rock outcrops as landmarks
+- [x] New story lines for the oasis and the desert crossing (walking time ≈ 50 s at 3 units/s)
 
 ## Phase 4 — Omens & the mirage
 *Goal: make the book's ideas things the player does, not just reads.*

@@ -1,5 +1,6 @@
 // orb.js - The glowing orb (the "treasure") with sound-reactive waves and orbiting particles
 import * as THREE from 'three';
+import { createGlowTexture } from './world/sky.js';
 
 const BASE_COLOR = 0xffcc66;
 const WAVE_COUNT = 32;
@@ -19,6 +20,16 @@ export class Orb {
 
         this.particles = this.createParticles();
         this.mesh.add(this.particles);
+
+        // A halo that shines through the fog, so the light is visible from far away
+        this.glow = new THREE.Sprite(new THREE.SpriteMaterial({
+            map: createGlowTexture('rgba(255, 214, 140, 0.9)'),
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+            fog: false
+        }));
+        this.glow.scale.setScalar(10);
+        this.mesh.add(this.glow);
     }
 
     get position() {
