@@ -1,8 +1,9 @@
 {
   "name": "the-mirage-of-light",
   "version": "1.0.0",
-  "description": "A Three.js interactive experience",
-  "main": "main.js",
+  "description": "An interactive Three.js parable inspired by The Alchemist",
+  "private": true,
+  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

@@ -422,6 +422,18 @@ export class Environment {
     }
 
 
+    // Animate living elements (grass swaying in the wind)
+    update(elapsed) {
+        this.grassPatches.forEach(grassPatch => {
+            grassPatch.children.forEach(blade => {
+                const userData = blade.userData;
+                blade.rotation.x = userData.originalHeight *
+                    Math.sin(elapsed * userData.waveSpeed + userData.phaseOffset) *
+                    userData.waveAmplitude;
+            });
+        });
+    }
+
     simpleNoise(x, z) {
         return Math.sin(x * 3.14) * Math.cos(z * 3.14);
     }

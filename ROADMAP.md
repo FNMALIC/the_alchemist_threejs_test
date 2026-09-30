@@ -32,13 +32,13 @@ A 5–10 minute walk with a clear shape:
 - [x] Move `ambient.mp3` to `public/` so production builds include it
 - [x] Add `.gitignore`
 
-## Phase 2 — Clean structure
+## Phase 2 — Clean structure ✅
 *Goal: make the code easy to grow before adding features.*
 
-- [ ] Split `script.js` into modules: `main.js` (setup + loop), `player.js`, `audio.js`, `story.js`, `effects.js`, `world/` (terrain, vegetation, sky)
-- [ ] Replace the `setTimeout` chain with a story state machine: each stage has `enter()`, `update(dt)` and `exit()`, triggered by where the player is
-- [ ] Move UI styles into CSS in `index.html`
-- [ ] Repo cleanup: keep one lockfile, fix `package.json` `main`, write a README (how to run it, the concept)
+- [x] Split `script.js` into modules under `src/`: `main.js` (setup + loop), `player.js`, `orb.js`, `audio.js`, `effects.js`, `story.js`, `stages.js`, `world/environment.js`
+- [x] Replace the `setTimeout` chain with a story state machine: each stage has `enter()`, `update(stageTime, delta)` and `exit()`, and moves on based on where the player is or how long the stage has run
+- [x] Move UI elements and styles into `index.html` / CSS
+- [x] Repo cleanup: keep one lockfile (npm), drop `package.json` `main`, stop tracking `.idea/`, write a README (how to run it, the concept, structure)
 
 ## Phase 3 — Build the world (desert + oasis)
 *Goal: the space has to be big enough for a real journey.*
@@ -46,6 +46,7 @@ A 5–10 minute walk with a clear shape:
 - [ ] Larger terrain (~400×400) with dunes from proper noise (e.g. `simplex-noise`)
 - [ ] **The oasis** (start point): the old tree, palms, a small pool. This is the "home" you'll return to
 - [ ] The orb placed far away (~150 units), faintly visible on the horizon from the start
+  (currently the orb is so close that at walking speed you reach it before the "very close" line can show)
 - [ ] Night sky: stars, moon, deep blue-to-black gradient
 - [ ] Fog that thins as you approach the orb, so the light "pulls" through the haze
 - [ ] Keep the player on the terrain surface (height lookup) and inside world bounds
