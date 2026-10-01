@@ -76,6 +76,7 @@ const player = new PlayerController(camera, document.body, {
     }
 });
 player.placeOnGround();
+player.movement.windDirection = world.wind.direction; // The storm pushes the way the wind blows
 let distanceWalked = 0;
 let slideDistance = 0;
 const lastPosition = camera.position.clone();
@@ -227,7 +228,10 @@ function animate() {
     for (let remaining = delta; remaining > 1e-6; remaining -= 0.1) player.update(Math.min(remaining, 0.1));
     environment.update(delta);
     // Measured from the eye position, so the head's sway doesn't count as walking
-    distanceWalked += Math.hypot(player.eye.x - lastPosition.x, player.eye.z - lastPosition.z);
+    const stepped = Math.hypot(player.eye.x - lastPosition.x, player.eye.z - lastPosition.z);
+    distanceWalked += stepped;
+    // After the light, the morning goes on as you walk home: the sun climbs, the sand warms
+    if (['morning', 'rest'].includes(story.current)) world.sky.clock.passMorning(stepped * 0.4 + delta * 0.1);
     lastPosition.copy(player.eye);
 
     storyState.distanceToOrb = Math.hypot(camera.position.x - orb.position.x, camera.position.z - orb.position.z);
@@ -256,7 +260,9 @@ function animate() {
     constellations.update(delta, camera, player.isLocked && !player.interaction.target);
 
     // The music grows with the walk and turns toward morning at first light
-    music.update(delta, { progress: world.sky.dawnProgress, sunAltitude: world.sky.sunAltitude, storm: stormIntensity });
+    music.update(delta, {
+        progress: world.sky.dawnProgress, sunAltitude: world.sky.sunAltitude, storm: stormIntensity, wind: world.wind
+    });
 
     // Sliding down a dune: the feet cut a groove (the spray around them comes from the environment)
     const slideSpeed = player.slide.length();
@@ -268,6 +274,8 @@ function animate() {
         }
     }
     world.updateEnvironment(renderer.renderer);
+    // By mid-morning the sand is warm enough to make the far air waver
+    renderer.setShimmer(THREE.MathUtils.smoothstep(world.sky.sunAltitude, 7, 13) * (1 - stormIntensity), elapsed);
 
     renderer.render();
 }

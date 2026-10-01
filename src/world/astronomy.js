@@ -79,7 +79,8 @@ export function brightness(body, date) {
 }
 
 // Journey clock: time moves from night toward sunrise as the player walks,
-// and slowly on its own while they stand still.
+// and slowly on its own while they stand still. After sunrise it can go on into the morning.
+const MORNING_MINUTES = 60;
 export class SkyClock {
     constructor({ start, end, walkLength = 160, idleSeconds = 900 }) {
         this.start = start.getTime();
@@ -88,6 +89,12 @@ export class SkyClock {
         this.idleSeconds = idleSeconds; // Real seconds for the full dawn when standing still
         this.progress = 0;
         this.hurrySeconds = 0;
+        this.morningMinutes = 0; // Past `end`: the morning after sunrise, up to MORNING_MINUTES
+    }
+
+    // Let the morning go on past sunrise, by this many minutes of sky time
+    passMorning(minutes) {
+        this.morningMinutes = Math.min(MORNING_MINUTES, this.morningMinutes + minutes);
     }
 
     // Bring the sunrise within the given number of seconds
@@ -103,6 +110,6 @@ export class SkyClock {
     }
 
     get date() {
-        return new Date(this.start + (this.end - this.start) * this.progress);
+        return new Date(this.start + (this.end - this.start) * this.progress + this.morningMinutes * 60000);
     }
 }

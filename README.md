@@ -92,6 +92,8 @@ src/
                       (Venus glowing as the morning star), zodiacal light, twilight colours, sun and moonlight
     milkyWay.js       The Milky Way, placed by galactic coordinates, with the Great Rift and Andromeda
     meteors.js        Shooting stars at real rates: sporadic ones and the year's showers from their radiants
+    wind.js           One wind for everything: still at night, a breeze before dawn, still at sunrise
+    sandWisps.js      Sand blowing off the high dune crests when the wind can lift it
     constellations.js Rest your gaze on a constellation and its figure draws itself, then its name
     astronomy.js      Sky positions over Al-Fayoum, dawn times, and the walking-driven sky clock
     props.js          Old tree, palms, shrubs, rocks, grass, flowers (seeded, for the endless desert)

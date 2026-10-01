@@ -175,6 +175,17 @@ The journey matters more than the destination. Very few words; the world tells t
 - [x] Venus as the morning star when it is up (from November 2026): the brightest light before sunrise, with a soft glow; Jupiter glows a little too
 - [x] Constellations: rest the centre dot on one for a moment and its figure draws itself from star to star (each star ringed as the line reaches it), then its name and meaning appear below it ("Aries, the Ram"); all 88, only on a dark enough night, above the horizon and with nothing in the way; looking away fades it
 
+## Wind and sand ✅
+*Goal: the desert is never quite still, and it does not keep your path.*
+
+- [x] One wind (`wind.js`) for the dust, the music's wind, the palms and grass, the ripples, the crests and the footprints; it veers a few degrees over time
+- [x] The night's wind follows the real sun: still in the cold hours, a breeze rising before dawn (from ~15° below the horizon), still again at sunrise, a light warm breeze later in the morning; the storm overrides it
+- [x] Sand streams off the high crests in thin wisps once the wind can lift it (above a threshold, more as it rises), carried downwind off the sharp edge; against a low sun or the moon the grains shine
+- [x] The ripples creep downwind, a centimetre or two a second
+- [x] Footprints age by the wind's work, not by the clock: a breeze fills them in a minute or two, still air leaves them for many minutes, the storm wipes the trail; distant prints fill grain by grain from the side the wind comes from
+- [x] The sand cools and warms: blue-tinted at night, gold at sunrise, plain and warm by mid-morning
+- [x] The morning goes on after the light: walking home, the sun climbs (up to an hour past sunrise), and by mid-morning the warm air makes the far horizon shimmer
+
 ## Next ideas
 
 - [ ] Daylight details on the way back: things you passed in the dark look different in the morning

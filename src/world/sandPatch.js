@@ -10,7 +10,8 @@
 // - Each footstep presses a print into it: the oval of a bare sole, deepest under the heel and the
 //   ball, narrower at the arch, with a low rim of sand pushed aside. Sliding cuts a groove. Vertices are displaced by it and every pixel is shaded
 //   with its slope, so prints catch the light.
-// - The wind slowly fills everything back in (half-filled after ERODE_HALF_LIFE seconds).
+// - The wind slowly fills everything back in: half-filled after ERODE_HALF_LIFE of the wind's
+//   work (see wind.js), about a minute in a breeze, a few minutes in still air.
 // Further away, the footprint marks in footprints.js carry the trail on.
 import * as THREE from 'three';
 
@@ -24,7 +25,7 @@ const MAX_DEFORM = 0.08; // ± metres the texture can hold
 const RECENTER_DISTANCE = 2; // How far the player may stray from the centre before it moves
 const SNAP = 0.5; // The centre moves in steps of whole vertices and texels
 const EDGE_BLEND = 1.5; // Metres over which the patch blends into the coarse ground
-export const ERODE_HALF_LIFE = 150; // Seconds for the wind to half-fill a footprint
+export const ERODE_HALF_LIFE = 40; // Wind work (Wind.erosion) to half-fill a footprint
 const ERODE_INTERVAL = 0.5;
 
 const PRINT_DEPTH = 0.04;
@@ -59,8 +60,9 @@ const floatTexture = (data, width, height) => {
 export class SandPatch {
     constructor(terrain, startX, startZ) {
         this.terrain = terrain;
-        this.time = 0;
+        this.time = 0; // The wind's work so far (Wind.erosion): prints age by it
         this.erodeTimer = 0;
+        this.erodedAt = 0;
         this.prints = []; // Recent prints, to re-press them when the patch moves back over them
 
         this.heights = new Float32Array(VERTS * VERTS);
@@ -380,8 +382,9 @@ export class SandPatch {
         this.deformTexture.needsUpdate = true;
     }
 
-    update(delta, playerX, playerZ) {
-        this.time += delta;
+    // erosion: the wind's accumulated work (Wind.erosion)
+    update(delta, playerX, playerZ, erosion) {
+        this.time = erosion;
 
         if (Math.max(Math.abs(playerX - this.center.x), Math.abs(playerZ - this.center.z)) > RECENTER_DISTANCE) {
             this.recenter(playerX, playerZ);
@@ -390,8 +393,9 @@ export class SandPatch {
         // The wind slowly fills footprints back in
         this.erodeTimer += delta;
         if (this.erodeTimer >= ERODE_INTERVAL) {
-            const keep = Math.pow(0.5, this.erodeTimer / ERODE_HALF_LIFE);
+            const keep = Math.pow(0.5, (this.time - this.erodedAt) / ERODE_HALF_LIFE);
             this.erodeTimer = 0;
+            this.erodedAt = this.time;
             const { deform, bytes } = this;
             let changed = false;
             for (let i = 0; i < deform.length; i++) {

@@ -7,6 +7,8 @@ import { Footprints } from './footprints.js';
 import { SandSpray } from './sandSpray.js';
 import { SandPatch } from './sandPatch.js';
 import { DesertChunks, CHUNK_SIZE, KNOWN_CHUNKS } from './desertChunks.js';
+import { Wind } from './wind.js';
+import { SandWisps } from './sandWisps.js';
 import {
     createOldTree, createPalm, createShrub, createRock, createGrassPatch, createFlower, swayGrass
 } from './props.js';
@@ -21,6 +23,25 @@ const STORM_SAND = new THREE.Color(0x7d6548);
 
 // Height of the pool's surface; ground below it is under water
 export const WATER_LEVEL = -0.15;
+
+// The sand's temperature by sun altitude (degrees): cool and blue at night, gold as the sun comes
+// up, warm and plain by mid-morning
+const SAND_TINTS = [
+    { altitude: -14, tint: new THREE.Color(0.86, 0.92, 1.1) },
+    { altitude: -7, tint: new THREE.Color(0.94, 0.95, 1.03) },
+    { altitude: -1, tint: new THREE.Color(1.1, 0.99, 0.86) },
+    { altitude: 4, tint: new THREE.Color(1.12, 1.0, 0.84) },
+    { altitude: 12, tint: new THREE.Color(1.04, 1.0, 0.95) }
+];
+
+function sandTintAt(altitude, target) {
+    if (altitude <= SAND_TINTS[0].altitude) return target.copy(SAND_TINTS[0].tint);
+    for (let i = 1; i < SAND_TINTS.length; i++) {
+        const a = SAND_TINTS[i - 1], b = SAND_TINTS[i];
+        if (altitude <= b.altitude) return target.copy(a.tint).lerp(b.tint, (altitude - a.altitude) / (b.altitude - a.altitude));
+    }
+    return target.copy(SAND_TINTS[SAND_TINTS.length - 1].tint);
+}
 
 export class World {
     // oasis: { x, z, poolX, poolZ }, orb: { x, z }
@@ -62,18 +83,22 @@ export class World {
         // Beyond it, the desert goes on, made as you walk
         this.chunks = new DesertChunks(this, { ...this.terrain.center });
 
+        // One wind for everything that moves with it
+        this.wind = new Wind();
         this.dust = new Dust();
         scene.add(this.dust.points);
+        this.wisps = new SandWisps(this.heightAt);
+        scene.add(this.wisps.points);
 
         // The sand remembers you: footprints, and grains kicked up as you walk
         const surfaceAt = (x, z) => this.terrain.surfaceHeightAt(x, z);
         this.sandPatch = new SandPatch(this.terrain, playerStart.x, playerStart.z);
         scene.add(this.sandPatch.mesh);
-        this.footprints = new Footprints(surfaceAt, this.terrain.hole);
+        this.footprints = new Footprints(surfaceAt, this.terrain.hole, { windDirection: this.wind.direction });
         scene.add(this.footprints.mesh);
         this.sandSpray = new SandSpray(surfaceAt);
         scene.add(this.sandSpray.points);
-        this.glitterDirection = new THREE.Vector3();
+        this.lookDirection = new THREE.Vector3();
     }
 
     add(object) {
@@ -212,20 +237,46 @@ export class World {
         this.scene.fog.density = THREE.MathUtils.lerp(
             THREE.MathUtils.lerp(FOG_DENSITY_START, FOG_DENSITY_END, this.sky.dawnProgress), STORM_FOG_DENSITY, storm
         );
-        this.dust.update(delta, elapsed, camera, storm);
+        const wind = this.wind;
+        wind.update(delta, this.sky.sunAltitude, storm);
+        this.dust.update(delta, elapsed, camera, storm, wind);
+        this.wisps.update(delta, camera, wind, this.sandLight(), this.forwardGlow(camera));
         this.sandSpray.update(delta);
-        this.sandPatch.update(delta, camera.position.x, camera.position.z);
-        this.footprints.update(delta);
+        this.sandPatch.update(delta, camera.position.x, camera.position.z, wind.erosion);
+        this.footprints.update(wind.erosion);
         this.updateGlitter();
+        sandTintAt(this.sky.sunAltitude, this.terrain.sandTint.value);
 
-        // Wind comes in slow gusts; grass and palm crowns bend with it
-        const gust = 0.6 + 0.4 * Math.sin(elapsed * 0.35) + 0.2 * Math.sin(elapsed * 1.3 + 1);
+        // The ripples creep downwind, a centimetre or two a second (more in a storm). The ripple
+        // map repeats every 4 m, so its offset moves in 4 m units; its v runs against world z.
+        const creep = (0.006 + 0.02 * Math.min(1, wind.strength)) * delta / 4;
+        const ripples = this.terrain.ripples.offset;
+        ripples.x = (ripples.x - wind.direction.x * creep) % 1;
+        ripples.y = (ripples.y + wind.direction.y * creep) % 1;
+
+        // Grass and palm crowns bend with the wind
+        const gust = 0.35 + 1.7 * wind.calm * wind.gust + 2 * storm;
         this.grassPatches.forEach(patch => swayGrass(patch, elapsed, gust));
         this.palms.forEach(palm => {
             const { crown, swayPhase } = palm.userData;
             crown.rotation.x = Math.sin(elapsed * 0.9 + swayPhase) * 0.035 * gust;
             crown.rotation.z = Math.sin(elapsed * 0.7 + swayPhase * 1.7) * 0.05 * gust;
         });
+    }
+
+    // Blowing sand seen against the sun or moon shines: light scattered forward through it
+    forwardGlow(camera) {
+        const look = camera.getWorldDirection(this.lookDirection);
+        const { sun, moon } = this.lights;
+        const towardSun = Math.max(0, look.dot(this.sky.sunDirection));
+        const towardMoon = Math.max(0, look.dot(this.sky.moonDirection));
+        return 2.5 * Math.pow(towardSun, 3) * Math.min(1, sun.intensity) + 1.5 * Math.pow(towardMoon, 3) * moon.intensity;
+    }
+
+    // How lit the sand is, 0..1 (for things drawn unlit, like blowing sand)
+    sandLight() {
+        const { moon, sun, hemisphere } = this.lights;
+        return THREE.MathUtils.clamp(0.06 + sun.intensity * 0.22 + moon.intensity * 0.3 + hemisphere.intensity * 0.08, 0.05, 1);
     }
 
     // Sand sparkles in whichever of the moon or sun is brighter

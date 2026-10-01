@@ -223,7 +223,8 @@ export class JourneyMusic {
 
     // progress: 0..1 along the journey (distance walked); sunAltitude: degrees
     // storm: 0 calm .. 1 sandstorm (the wind roars and drowns the music)
-    update(delta, { progress, sunAltitude, storm = 0 }) {
+    // wind: { calm, gust } from Wind (still air is near silent, a breeze rushes)
+    update(delta, { progress, sunAltitude, storm = 0, wind = { calm: 0.3, gust: 1 } }) {
         if (!this.started) {
             if (!this.audio.started) return;
             this.start();
@@ -235,11 +236,11 @@ export class JourneyMusic {
         // First light: once the sun is 6° below the horizon, the music turns toward morning
         if (sunAltitude > -6) this.dawn = Math.min(1, this.dawn + delta / 12);
 
-        // Wind gusts (same rhythm as the swaying palms), a little calmer at dawn
-        const gust = 0.6 + 0.4 * Math.sin(this.time * 0.35) + 0.2 * Math.sin(this.time * 1.3 + 1);
-        const calmWind = (0.13 + 0.17 * gust) * (1 - 0.4 * this.dawn);
-        ease(this.windGain.gain, calmWind + storm * (0.75 + 0.25 * gust), 0.3);
-        ease(this.windFilter.frequency, 300 + 400 * gust + storm * 1400, 0.3);
+        // The wind: the same one that moves the dust and the palms
+        const gust = wind.gust;
+        const breeze = Math.min(1.2, wind.calm * gust);
+        ease(this.windGain.gain, 0.05 + 0.35 * breeze + storm * (0.75 + 0.25 * gust), 0.3);
+        ease(this.windFilter.frequency, 280 + 600 * breeze + storm * 1400, 0.3);
         const hush = 1 - 0.88 * storm; // Everything else is drowned by the storm
 
         // The layers come in as the walk goes on

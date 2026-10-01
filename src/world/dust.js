@@ -3,7 +3,6 @@ import * as THREE from 'three';
 import { createGlowTexture } from './sky.js';
 
 const BOX = new THREE.Vector3(60, 8, 60); // Area around the player that is filled with dust
-const WIND = new THREE.Vector3(1.6, 0.05, 0.6);
 
 export class Dust {
     constructor(count = 1500) {
@@ -32,14 +31,15 @@ export class Dust {
         this.points.frustumCulled = false; // Always around the camera
     }
 
-    // storm: 0 calm .. 1 sandstorm (thicker, larger grains driven much faster)
-    update(delta, elapsed, camera, storm = 0) {
+    // storm: 0 calm .. 1 sandstorm (thicker, larger grains driven much faster); wind: Wind
+    update(delta, elapsed, camera, storm, wind) {
         const positions = this.points.geometry.attributes.position.array;
         const { offsets, drift } = this;
         const box = [BOX.x, BOX.y, BOX.z];
-        const force = 1 + storm * 9;
-        const wind = [WIND.x * force, WIND.y * (1 + storm * 3), WIND.z * force];
-        this.points.material.opacity = 0.4 + storm * 0.45;
+        // Barely drifting in still air, carried along in a breeze, driven in a storm
+        const speed = 0.35 + 1.8 * Math.min(1, wind.calm * wind.gust) + storm * 15;
+        const windVector = [wind.direction.x * speed, 0.05 * (1 + storm * 3), wind.direction.y * speed];
+        this.points.material.opacity = 0.2 + 0.35 * Math.min(1, wind.calm / 0.7) + storm * 0.45;
         this.points.material.size = 0.08 + storm * 0.1;
         const origin = [camera.position.x - BOX.x / 2, camera.position.y - 3, camera.position.z - BOX.z / 2];
 
@@ -47,7 +47,7 @@ export class Dust {
             const gust = 1 + Math.sin(elapsed * 0.7 + i) * 0.3;
             for (let axis = 0; axis < 3; axis++) {
                 const index = i * 3 + axis;
-                offsets[index] += wind[axis] * drift[i] * gust * delta;
+                offsets[index] += windVector[axis] * drift[i] * gust * delta;
 
                 // Wrap relative to the camera so the dust always surrounds the player
                 const size = box[axis];

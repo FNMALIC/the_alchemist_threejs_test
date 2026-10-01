@@ -55,6 +55,8 @@ export class Terrain {
             strength: { value: 0 }
         };
         this.sandColors = { trough: SAND_TROUGH, crest: SAND_CREST, damp: SAND_DAMP };
+        // The sand's temperature: a cool blue tint at night, gold at sunrise (set by World)
+        this.sandTint = { value: new THREE.Color(1, 1, 1) };
         this.ripples = createRippleNormalMap();
         this.ripples.repeat.set(this.size / 4, this.size / 4); // One tile of ripples every 4 units
 
@@ -169,6 +171,7 @@ export class Terrain {
             shader.uniforms.glitterDirection = this.glitter.direction;
             shader.uniforms.glitterColor = this.glitter.color;
             shader.uniforms.glitterStrength = this.glitter.strength;
+            shader.uniforms.sandTint = this.sandTint;
 
             shader.vertexShader = shader.vertexShader
                 .replace('#include <common>', '#include <common>\nvarying vec3 vGlitterPosition;')
@@ -180,9 +183,11 @@ export class Terrain {
                     uniform vec3 glitterDirection;
                     uniform vec3 glitterColor;
                     uniform float glitterStrength;
+                    uniform vec3 sandTint;
                     varying vec3 vGlitterPosition;
                     float glitterHash(vec3 p, vec3 k) { return fract(sin(dot(p, k)) * 43758.5453); }`)
                 .replace('#include <opaque_fragment>', `{
+                    outgoingLight *= sandTint;
                     vec3 grainSpace = vGlitterPosition * 45.0; // ~2 cm grains
                     vec3 cell = floor(grainSpace);
                     vec2 inCell = fract(grainSpace.xz) - 0.5;

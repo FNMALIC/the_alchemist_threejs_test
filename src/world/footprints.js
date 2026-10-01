@@ -2,14 +2,16 @@
 // (where prints are real dents, see sandPatch.js). One mark per step, lying on the dune's surface,
 // drawn as a darkening "multiply" decal so they work in moonlight and sunlight alike.
 // All marks are one InstancedMesh (one draw call); the oldest are reused after MAX_PRINTS.
-// The wind slowly covers them: they fade between FADE_START and FADE_END seconds old.
+// The wind slowly covers them, grain by grain, the side facing the wind first. Their age is
+// counted in the wind's work (Wind.erosion), not seconds: a breeze erases a trail in a minute or
+// two, still air leaves it for many minutes, a sandstorm wipes it away almost at once.
 import * as THREE from 'three';
 
 const MAX_PRINTS = 1500;
 const FOOT_SPACING = 0.11; // Metres from the body's centre line to each foot
 const PRINT_SIZE = { width: 0.15, length: 0.3 };
-const FADE_START = 240;
-const FADE_END = 480;
+const FADE_START = 30; // Wind work (see wind.js) before a print starts to fill...
+const FADE_END = 95; // ...and when it is gone
 const PATCH_EDGE = 1.0; // Show marks in the patch's outer metre, where its dents fade out
 
 // A bare footprint: heel, arch, ball and toes, darker where the foot pressed deepest.
@@ -50,11 +52,13 @@ function createFootprintTexture() {
 export class Footprints {
     // hole: { center, half } uniforms of the detailed sand patch, where real dents take over
     //   (null: drawn everywhere, e.g. someone else's old trail)
-    // options.ageing: fade with age (the wind covering them); options.strength: 0..1 how dark
-    constructor(heightAt, hole, { ageing = true, strength = 1, name = 'player' } = {}) {
+    // options.ageing: fill in with age (the wind covering them); options.strength: 0..1 how dark
+    // options.windDirection: Vector2 the wind blows toward (the side it comes from fills first)
+    constructor(heightAt, hole, { ageing = true, strength = 1, name = 'player', windDirection = null } = {}) {
         this.heightAt = heightAt;
         this.next = 0;
         this.time = { value: 0 };
+        const wind = { value: windDirection ?? new THREE.Vector2(1, 0) };
 
         // Flat on the ground, toes toward -Z
         const geometry = new THREE.PlaneGeometry(PRINT_SIZE.width, PRINT_SIZE.length).rotateX(-Math.PI / 2);
@@ -78,6 +82,7 @@ export class Footprints {
         const time = this.time;
         material.onBeforeCompile = shader => {
             shader.uniforms.printTime = time;
+            shader.uniforms.windDirection = wind;
             if (hole) {
                 shader.uniforms.holeCenter = hole.center;
                 shader.uniforms.holeHalf = hole.half;
@@ -86,23 +91,33 @@ export class Footprints {
                 .replace('#include <common>', `#include <common>
                     attribute float birth;
                     uniform float printTime;
-                    varying float vPrintFade;
-                    varying vec2 vPrintPosition;`)
+                    varying float vFill;
+                    varying vec2 vPrintPosition;
+                    varying vec2 vPrintCenter;`)
                 .replace('#include <project_vertex>', `#include <project_vertex>
-                    vPrintFade = ${ageing
-                        ? `1.0 - smoothstep(${FADE_START.toFixed(1)}, ${FADE_END.toFixed(1)}, printTime - birth)`
-                        : '1.0'} * ${strength.toFixed(2)};
-                    vPrintPosition = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xz;`);
+                    vFill = ${ageing
+                        ? `smoothstep(${FADE_START.toFixed(1)}, ${FADE_END.toFixed(1)}, printTime - birth)`
+                        : '0.0'};
+                    vPrintPosition = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xz;
+                    vPrintCenter = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xz;`);
             shader.fragmentShader = shader.fragmentShader
                 .replace('#include <common>', `#include <common>
                     uniform vec2 holeCenter;
                     uniform float holeHalf;
-                    varying float vPrintFade;
-                    varying vec2 vPrintPosition;`)
+                    uniform vec2 windDirection;
+                    varying float vFill;
+                    varying vec2 vPrintPosition;
+                    varying vec2 vPrintCenter;`)
                 .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
                     ${hole ? `if (all(lessThan(abs(vPrintPosition - holeCenter), vec2(holeHalf - ${PATCH_EDGE.toFixed(1)})))) discard;` : ''}`)
                 .replace('#include <map_fragment>', `#include <map_fragment>
-                    diffuseColor.rgb = mix(vec3(1.0), diffuseColor.rgb, vPrintFade); // White leaves the sand unchanged`);
+                    // Sand fills the print grain by grain (~2 cm), from the side the wind comes from
+                    float grain = fract(sin(dot(floor(vPrintPosition * 55.0), vec2(12.9898, 78.233))) * 43758.5453);
+                    float downwind = dot(vPrintPosition - vPrintCenter, windDirection) / 0.15; // -1 .. 1
+                    float threshold = clamp(0.5 + 0.3 * downwind + 0.45 * (grain - 0.5), 0.02, 0.98);
+                    float covered = max(smoothstep(threshold - 0.08, threshold + 0.08, vFill), smoothstep(0.85, 1.0, vFill));
+                    float printFade = (1.0 - covered) * ${strength.toFixed(2)};
+                    diffuseColor.rgb = mix(vec3(1.0), diffuseColor.rgb, printFade); // White leaves the sand unchanged`);
         };
 
         material.customProgramCacheKey = () => `footprints-${name}`; // Each kind compiles its own shader
@@ -150,7 +165,8 @@ export class Footprints {
         this.mesh.instanceMatrix.needsUpdate = true;
     }
 
-    update(delta) {
-        this.time.value += delta;
+    // erosion: the wind's accumulated work (Wind.erosion), the clock prints age by
+    update(erosion) {
+        this.time.value = erosion;
     }
 }
