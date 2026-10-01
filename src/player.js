@@ -77,6 +77,9 @@ export class Player {
         this.speed = 0; // Horizontal ground speed (m/s), walking and sliding combined
 
         this.gait = new Gait();
+        this.storm = 0; // 0 calm .. 1 sandstorm: walking is slowed, the wind pushes and shakes
+        this.windDirection = new THREE.Vector2(1.6, 0.6).normalize();
+        this.time = 0;
         this.seated = null; // { x, z, lookX, lookZ, time } once sitting down
         this.appliedRoll = 0;
         this.sideways = new THREE.Vector3();
@@ -155,9 +158,16 @@ export class Player {
             return;
         }
 
+        this.time += delta;
         const before = this.camera.position.clone();
         const walking = this.controls.isLocked && this.walk(delta);
         this.slideOnSand(delta, walking);
+        // The storm's wind pushes you sideways, in gusts
+        if (this.storm > 0 && this.grounded) {
+            const gust = 0.6 + 0.4 * Math.sin(this.time * 1.7) * Math.sin(this.time * 0.6);
+            this.camera.position.x += this.windDirection.x * 0.5 * this.storm * gust * delta;
+            this.camera.position.z += this.windDirection.y * 0.5 * this.storm * gust * delta;
+        }
         this.collide(this.camera.position);
         this.keepInBounds(this.camera.position);
         this.fall(delta);
@@ -220,6 +230,7 @@ export class Player {
                 speed = 1 + 0.2 * Math.min(1, angle / (20 * Math.PI / 180));
             }
 
+            speed *= 1 - 0.45 * this.storm; // Leaning into the wind
             if (this.isUnderWater(position.x, position.z)) speed *= WADING_SPEED;
             else if (!this.isFirmGround(position.x, position.z)) speed *= 0.92; // Soft sand
 
@@ -364,7 +375,11 @@ export class Player {
         this.sideways.set(1, 0, 0).applyQuaternion(this.camera.quaternion).setY(0).normalize();
         this.camera.position.y += this.gait.offsetY;
         this.camera.position.addScaledVector(this.sideways, this.gait.offsetSide);
-        this.appliedRoll = this.gait.rollAngle;
+        // Buffeted by the storm: small, uneven shakes
+        const t = this.time;
+        const buffet = this.storm * (Math.sin(t * 13.1) * Math.sin(t * 2.3) + 0.5 * Math.sin(t * 7.7));
+        this.camera.position.y += buffet * 0.012;
+        this.appliedRoll = this.gait.rollAngle + buffet * 0.006;
         this.camera.rotateZ(this.appliedRoll);
     }
 }

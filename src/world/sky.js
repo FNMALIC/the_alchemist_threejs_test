@@ -155,6 +155,9 @@ export class Sky {
             glow: new THREE.Color()
         };
 
+        this.storm = 0; // 0 clear .. 1 sandstorm (set by World)
+        this.stormColor = new THREE.Color();
+
         this.group = new THREE.Group();
         this.group.add(this.createDome());
 
@@ -191,10 +194,12 @@ export class Sky {
     }
 
     createDome() {
-        const material = new THREE.ShaderMaterial({
+        const material = this.domeMaterial = new THREE.ShaderMaterial({
             side: THREE.BackSide,
             depthWrite: false,
             uniforms: {
+                stormColor: { value: this.stormColor },
+                stormAmount: { value: 0 },
                 zenithColor: { value: this.colors.zenith },
                 horizonColor: { value: this.colors.horizon },
                 glowColor: { value: this.colors.glow },
@@ -208,6 +213,8 @@ export class Sky {
                 }
             `,
             fragmentShader: /* glsl */`
+                uniform vec3 stormColor;
+                uniform float stormAmount;
                 uniform vec3 zenithColor;
                 uniform vec3 horizonColor;
                 uniform vec3 glowColor;
@@ -223,6 +230,7 @@ export class Sky {
                     float nearHorizon = 1.0 - smoothstep(0.0, 0.45, abs(direction.y));
                     color += glowColor * pow(towardSun, 4.0) * nearHorizon;
 
+                    color = mix(color, stormColor, stormAmount); // A sandstorm hides the sky
                     gl_FragColor = vec4(color, 1.0);
                     #include <tonemapping_fragment>
                     #include <colorspace_fragment>
@@ -388,12 +396,13 @@ export class Sky {
 
         const faintest = limitingMagnitude(sunAltitude);
         [this.starField, this.planets].forEach(points => {
-            points.material.uniforms.limitingMagnitude.value = faintest;
+            points.material.uniforms.limitingMagnitude.value = faintest - this.storm * 9;
             points.material.uniforms.time.value = elapsed;
         });
 
         // Moon and sun visibility
-        this.moon.visible = this.moonAltitude > -3;
+        this.moon.visible = this.moonAltitude > -3 && this.storm < 0.5;
+        this.domeMaterial.uniforms.stormAmount.value = this.storm * 0.95;
         this.moonHalo.material.opacity = this.moonFraction * (1 - THREE.MathUtils.smoothstep(sunAltitude, -10, 0));
         this.sun.visible = sunAltitude > -3;
 
@@ -402,11 +411,13 @@ export class Sky {
         const { hemisphere, moon, sun } = this.lights;
         hemisphere.color.copy(this.nightSky).lerp(this.dawnSky, dawn);
         hemisphere.groundColor.copy(this.nightGround).lerp(this.dawnGround, dawn);
-        hemisphere.intensity = 0.5 + dawn * 0.6;
+        hemisphere.intensity = (0.5 + dawn * 0.6) * (1 - 0.35 * this.storm);
 
         moon.intensity = 1.1 * this.moonFraction *
             THREE.MathUtils.smoothstep(this.moonAltitude, -2, 10) * (1 - dawn);
         sun.intensity = 4 * THREE.MathUtils.smoothstep(sunAltitude, -4, 4);
+        moon.intensity *= 1 - 0.8 * this.storm;
+        sun.intensity *= 1 - 0.8 * this.storm;
 
         // Lights (and their shadow area) follow the player; snapped to a grid to avoid shimmering
         this.shadowFocus.set(Math.round(camera.position.x), 0, Math.round(camera.position.z));

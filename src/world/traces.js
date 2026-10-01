@@ -1,19 +1,33 @@
-// traces.js - Someone else made this walk before you. You never meet them; you only find
-// what they left: a trail of old, half-erased footprints that wanders out to the light and
-// turns back home, a cold campfire, a dry well, a water jar, and a small stack of stones
-// under the old tree.
+// traces.js - Someone made this walk before you. You never meet them; you only find what they
+// left: a trail of old, half-erased footprints that wanders out to the light and turns back
+// home, a cold campfire, a dry well, a water jar, and a small stack of stones under the old tree.
+// At each place, a scrap of a letter weighted with a stone, and a cloth on a stick that the
+// wind moves, so the eye finds it from afar. The letters are written to someone they left
+// behind, asleep under the old tree: you.
+//
+// The desert also remembers you (see memory.js): your last walk is still faintly in the sand,
+// and each time you have sat under the tree, a pebble lies beside their stones.
 import * as THREE from 'three';
 import { Footprints } from './footprints.js';
 import { createRock } from './props.js';
 
 const STEP_LENGTH = 0.85;
 
-// Their way out: from the old tree, curving west of the straight line, past the campfire,
+// Their way out: from the old tree, a little west of the straight line, past the campfire,
 // the well and the jar, to where the light is
 const OUTWARD = [
-    [-1.6, 4], [-3, -8], [-12, -22], [-18, -36], [-22, -50], [-27, -68], [-28, -84],
-    [-22, -100], [-10, -117], [3, -132], [17, -144], [23.5, -148.5]
+    [-1.6, 4], [-1.5, -10], [-1, -24], [-1.5, -33], [2, -50], [6, -70], [8, -88], [9, -100],
+    [12, -112], [14.5, -124], [20, -138], [23.5, -148.5]
 ];
+
+// Where they stopped, and what they wrote there
+const LETTERS = {
+    campfire: 'First night. I can still see the palms if I turn around. I don\'t turn around.',
+    well: 'The wind took the stars tonight. I walked toward the light because it was the only thing I could see.',
+    jar: 'I left the jar here. The light never comes closer, but the sky is changing. Maybe that is enough.',
+    turn: 'There was nothing here. Only the morning. I am going home.',
+    home: 'I came back. You were asleep under the tree. I didn\'t wake you.'
+};
 // Their way home: east of the straight line, back to the tree
 const HOMEWARD = [
     [24.5, -148], [30, -128], [35, -100], [33, -70], [26, -42], [16, -20], [6, -6], [-0.8, 3.6]
@@ -23,12 +37,17 @@ const charredWood = new THREE.MeshStandardMaterial({ color: 0x2a2018, roughness:
 const ash = new THREE.MeshStandardMaterial({ color: 0x45403a, roughness: 1 });
 const clay = new THREE.MeshStandardMaterial({ color: 0x9a5a36, roughness: 0.85 });
 const darkness = new THREE.MeshBasicMaterial({ color: 0x050403 });
+const paper = new THREE.MeshStandardMaterial({ color: 0xe8dcc0, roughness: 0.9, side: THREE.DoubleSide });
+const pole = new THREE.MeshStandardMaterial({ color: 0x5a4632, roughness: 1 });
+const cloth = new THREE.MeshStandardMaterial({ color: 0x8a3b2c, roughness: 0.95, side: THREE.DoubleSide });
 
 export class Traces {
     // world: the World (for heightAt, surface heights and adding objects); oldTree: { x, z }
-    constructor(world, oldTree, lightPosition) {
+    // memory: { journeys, path } from memory.js
+    constructor(world, oldTree, lightPosition, memory = { journeys: 0, path: [] }) {
         this.world = world;
         this.heightAt = world.heightAt;
+        this.flags = [];
         // Old prints sit on whichever is higher: the true dune shape or the coarse mesh
         const groundAt = (x, z) => Math.max(this.heightAt(x, z), world.terrain.surfaceHeightAt(x, z));
 
@@ -38,22 +57,108 @@ export class Traces {
         // Where the light was, their turn for home is clear; further on the wind has taken more
         this.homeward = this.layTrail(HOMEWARD, 0.4, 25);
 
-        // Where the things they left are, and what you think when you find them
-        const campfire = this.campfire(-16.5, -37.5);
-        const well = this.well(-31, -83);
-        const jar = this.jar(-8.4, -119);
+        // The places they stopped, each with a letter and a cloth that the wind moves
+        const campfire = this.campfire(1.5, -32);
+        const well = this.well(11.5, -100);
+        const jar = this.jar(16.5, -124.5);
+        const turn = { x: 23.2, z: -146.6 }; // Where the light was, and their trail turns
+        this.note(campfire.x - 0.9, campfire.z + 0.6, 0.4);
+        this.note(well.x - 1.4, well.z + 0.4, -0.3);
+        this.note(jar.x + 0.5, jar.z + 0.5, 1.1);
+        this.note(turn.x, turn.z, 2.2);
+        this.flag(campfire.x + 0.9, campfire.z - 0.4);
+        this.flag(well.x + 1.5, well.z - 0.6);
+        this.flag(jar.x - 0.7, jar.z - 0.6);
 
         // Under the old tree: a seat facing the desert, and their small stack of stones beside it
         const toLight = new THREE.Vector2(lightPosition.x - oldTree.x, lightPosition.z - oldTree.z).normalize();
         this.seat = { x: oldTree.x + toLight.x * 1.1, z: oldTree.z + toLight.y * 1.1 };
         this.lookFromSeat = { x: lightPosition.x, z: lightPosition.z };
-        this.cairn = this.stackOfStones(this.seat.x + toLight.y * 0.9, this.seat.z - toLight.x * 0.9);
+        this.cairn = this.stackOfStones(this.seat.x + toLight.y * 0.9, this.seat.z - toLight.x * 0.9, memory.journeys);
+        this.note(this.cairn.x + 0.35, this.cairn.z + 0.3, 0.8);
 
+        // Your own last walk, still faintly in the sand
+        this.pastPath = this.layPastWalk(memory.path, groundAt);
+
+        // Letters are read when you come close; the last two only make sense in the morning
+        const letter = (place, key, radius = 3.5, when) => ({ ...place, radius, text: LETTERS[key], style: 'letter', duration: 10, when });
         this.moments = [
-            { ...campfire, radius: 3.5, text: 'Ashes. Someone rested here.' },
-            { ...well, radius: 4, text: 'A well. Dry for a long time.' },
-            { ...jar, radius: 3, text: 'A water jar, left behind.' }
+            letter(campfire, 'campfire'),
+            letter(well, 'well', 4),
+            letter(jar, 'jar'),
+            letter(turn, 'turn', 7, stage => stage === 'morning'),
+            letter(this.cairn, 'home', 4, stage => stage === 'morning')
         ];
+    }
+
+    // Faint prints along the path you walked last time
+    layPastWalk(points, groundAt) {
+        if (points.length < 10) return [];
+        this.pastTrail = new Footprints(groundAt, null, { ageing: false, strength: 0.5, name: 'past' });
+        this.world.scene.add(this.pastTrail.mesh);
+        let foot = 1;
+        const path = points.map(([x, z]) => ({ x, z }));
+        for (let i = 1; i < path.length; i++) {
+            const a = path[i - 1], b = path[i];
+            const length = Math.hypot(b.x - a.x, b.z - a.z);
+            const heading = Math.atan2(b.x - a.x, b.z - a.z);
+            for (let d = 0; d < length; d += STEP_LENGTH) {
+                foot = -foot;
+                if (Math.random() < 0.45) continue; // Mostly taken by the wind
+                const t = d / length;
+                this.pastTrail.add({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t, heading, foot, lift: 0.03 });
+            }
+        }
+        return path;
+    }
+
+    // Animate the cloths in the wind. gust: 0 still .. 1+ windy
+    update(elapsed, gust = 1) {
+        for (const { mesh, rest } of this.flags) {
+            const positions = mesh.geometry.attributes.position;
+            for (let i = 0; i < positions.count; i++) {
+                const x = rest[i * 3], y = rest[i * 3 + 1];
+                const along = x / 0.45; // 0 at the pole, 1 at the free end
+                const wave = Math.sin(elapsed * 5 - x * 9 + y * 2) * 0.07 * along * (0.5 + gust);
+                positions.setXYZ(i, x, y - along * along * 0.04 * (1.5 - Math.min(1, gust)), rest[i * 3 + 2] + wave);
+            }
+            positions.needsUpdate = true;
+            mesh.geometry.computeVertexNormals();
+        }
+    }
+
+    // A scrap of paper, folded once, held down by a small stone
+    note(x, z, turn) {
+        const y = this.ground(x, z);
+        const sheet = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.22, 2, 1).rotateX(-Math.PI / 2), paper);
+        const positions = sheet.geometry.attributes.position;
+        for (let i = 0; i < positions.count; i++) positions.setY(i, Math.abs(positions.getX(i)) < 0.01 ? 0.012 : 0);
+        sheet.geometry.computeVertexNormals();
+        sheet.position.set(x, y + 0.02, z);
+        sheet.rotation.y = turn;
+        sheet.receiveShadow = true;
+        this.world.add(sheet);
+        const stone = createRock(x + 0.04, z - 0.05, 0.05, this.heightAt, 0x7a6a5a);
+        stone.position.y = y + 0.04;
+        this.world.add(stone);
+    }
+
+    // A walking stick pushed into the sand with a strip of cloth tied to it
+    flag(x, z) {
+        const y = this.ground(x, z);
+        const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.025, 1.7, 6), pole);
+        stick.position.set(x, y + 0.75, z);
+        stick.rotation.z = 0.06;
+        stick.castShadow = true;
+        this.world.add(stick);
+
+        const geometry = new THREE.PlaneGeometry(0.45, 0.22, 10, 3).translate(0.225, 0, 0);
+        const strip = new THREE.Mesh(geometry, cloth);
+        strip.position.set(x + 0.03, y + 1.45, z);
+        strip.rotation.y = -0.5;
+        strip.castShadow = true;
+        this.world.add(strip);
+        this.flags.push({ mesh: strip, rest: Float32Array.from(geometry.attributes.position.array) });
     }
 
     // Footprints along a smooth path through the given points; some are lost to the wind,
@@ -141,8 +246,9 @@ export class Traces {
         return { x, z };
     }
 
-    // Flat stones balanced one on another: travellers leave these to say "I was here"
-    stackOfStones(x, z) {
+    // Flat stones balanced one on another: travellers leave these to say "I was here".
+    // Beside them, a pebble for each time you have sat here before.
+    stackOfStones(x, z, journeys = 0) {
         let y = this.ground(x, z);
         const sizes = [0.22, 0.18, 0.15, 0.12, 0.09];
         sizes.forEach((size, i) => {
@@ -154,6 +260,13 @@ export class Traces {
             this.world.add(stone);
             if (i === 0) this.world.colliders.push({ x, z, radius: 0.3 });
         });
+        for (let i = 0; i < Math.min(journeys, 24); i++) {
+            const angle = i * 2.4; // Spiral outward, one pebble per visit
+            const radius = 0.36 + i * 0.03;
+            const pebble = createRock(x + Math.cos(angle) * radius, z + Math.sin(angle) * radius, 0.075, this.heightAt, 0xd2c4ad);
+            pebble.scale.set(1, 0.55, 1);
+            this.world.add(pebble);
+        }
         return { x, z };
     }
 }

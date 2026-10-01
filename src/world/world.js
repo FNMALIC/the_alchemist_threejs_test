@@ -14,6 +14,10 @@ import {
 const FOG_DENSITY_START = 0.012;
 const FOG_DENSITY_END = 0.006;
 
+// A sandstorm thickens the air to this fog density
+const STORM_FOG_DENSITY = 0.085;
+const STORM_SAND = new THREE.Color(0x7d6548);
+
 // Height of the pool's surface; ground below it is under water
 export const WATER_LEVEL = -0.15;
 
@@ -29,6 +33,7 @@ export class World {
         this.grassPatches = [];
         this.palms = [];
         this.colliders = []; // { x, z, radius } circles the player can't walk into
+        this.storm = 0; // 0 calm .. 1 sandstorm (set from main.js)
 
         this.terrain = new Terrain({ oasis, orb });
         this.heightAt = (x, z) => this.terrain.heightAt(x, z);
@@ -172,10 +177,18 @@ export class World {
 
     // distanceWalked moves the sky from night toward sunrise
     update(delta, elapsed, camera, distanceWalked) {
+        // A sandstorm: blowing sand the colour of the dunes, dark at night, glowing as day comes
+        const storm = this.storm;
+        const daylight = 0.2 + 0.8 * THREE.MathUtils.smoothstep(this.sky.sunAltitude, -14, 2);
+        this.sky.stormColor.copy(STORM_SAND).multiplyScalar(daylight);
+        this.sky.storm = storm;
+
         this.sky.update(delta, elapsed, camera, distanceWalked);
-        this.scene.fog.color.copy(this.sky.horizonColor); // Fog keeps its own copy of the colour
-        this.scene.fog.density = THREE.MathUtils.lerp(FOG_DENSITY_START, FOG_DENSITY_END, this.sky.dawnProgress);
-        this.dust.update(delta, elapsed, camera);
+        this.scene.fog.color.copy(this.sky.horizonColor).lerp(this.sky.stormColor, storm); // Fog keeps its own copy
+        this.scene.fog.density = THREE.MathUtils.lerp(
+            THREE.MathUtils.lerp(FOG_DENSITY_START, FOG_DENSITY_END, this.sky.dawnProgress), STORM_FOG_DENSITY, storm
+        );
+        this.dust.update(delta, elapsed, camera, storm);
         this.sandSpray.update(delta);
         this.sandPatch.update(delta, camera.position.x, camera.position.z);
         this.footprints.update(delta);
@@ -198,7 +211,7 @@ export class World {
         const glitter = this.terrain.glitter;
         glitter.direction.value.copy(light.position).sub(light.target.position).normalize();
         glitter.color.value.copy(light.color);
-        glitter.strength.value = light.intensity;
+        glitter.strength.value = light.intensity * (1 - this.storm);
     }
 
     // Keep the sky's reflection map current (the renderer is needed to draw it)

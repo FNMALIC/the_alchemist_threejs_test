@@ -1,14 +1,19 @@
-// moments.js - Small discoveries along the way. Each shows one short line, once, when you come
-// near it. None of them is needed; you only find them if you wander.
+// moments.js - Small discoveries along the way. Each shows its text, once, when you come
+// near it (and, if it has one, when its `when(stage)` condition holds).
 
 export class Moments {
-    // storyText: the StoryText overlay
-    // moments: [{ text, test(x, z) -> boolean }] or [{ text, x, z, radius }]
-    constructor(storyText, moments) {
+    // storyText: the StoryText overlay; currentStage: () => name of the story's current stage
+    // moments: [{ text, test(x, z) }] or [{ text, x, z, radius }], optionally with
+    //   style ('letter'), duration (seconds) and when(stage)
+    constructor(storyText, moments, currentStage = () => null) {
         this.storyText = storyText;
+        this.currentStage = currentStage;
         this.pending = moments.map(moment => ({
             test: moment.test ?? ((x, z) => Math.hypot(x - moment.x, z - moment.z) < moment.radius),
-            text: moment.text
+            when: moment.when ?? (() => true),
+            text: moment.text,
+            style: moment.style,
+            duration: moment.duration ?? 5
         }));
         this.timer = 0;
     }
@@ -19,9 +24,11 @@ export class Moments {
         if (this.timer < 0.25 || this.storyText.isShowing) return;
         this.timer = 0;
 
-        const found = this.pending.findIndex(moment => moment.test(x, z));
+        const stage = this.currentStage();
+        const found = this.pending.findIndex(moment => moment.when(stage) && moment.test(x, z));
         if (found < 0) return;
-        this.storyText.show(this.pending[found].text, 5);
+        const moment = this.pending[found];
+        this.storyText.show(moment.text, moment.duration, moment.style);
         this.pending.splice(found, 1);
     }
 }

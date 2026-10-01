@@ -5,18 +5,18 @@
 //   mirage     you reach the light as the sun rises behind it, and it fades away.
 //   morning    their footprints turn back toward home. You may follow, or not.
 //   rest       under the old tree, you sit. The music falls away, the light whitens, a bird.
+// The traveller's letters (traces.js) and the storm (storm.js) run alongside these stages.
 
 const LINES = {
     night: 'Far away, a light.',
-    crossing: 'The sand is still cold.',
-    morning: 'Their footprints turn back here.'
+    crossing: 'The sand is still cold.'
 };
 
 const LEAVE_OASIS_DISTANCE = 25; // From where you woke
 const REACH_DISTANCE = 4.5; // From the light, along the ground
 const SEAT_DISTANCE = 2.5; // From the place under the old tree where you can sit
 
-// state: { orb, audio, music, storyText, sky, player, traces, ui,
+// state: { orb, audio, music, storyText, sky, player, traces, ui, remember(),
 //          distanceToOrb (along the ground), distanceFromStart, distanceToSeat, wantsToSit }
 export function createStages(state) {
     const { orb, audio, music, storyText, sky, player, traces, ui } = state;
@@ -49,7 +49,6 @@ export function createStages(state) {
         },
 
         morning: {
-            enter: () => storyText.show(LINES.morning, 6),
             update: () => {
                 const nearSeat = state.distanceToSeat < SEAT_DISTANCE;
                 ui.hint.classList.toggle('visible', nearSeat);
@@ -63,6 +62,7 @@ export function createStages(state) {
                 ui.hint.classList.remove('visible');
                 player.sit(traces.seat.x, traces.seat.z, traces.lookFromSeat.x, traces.lookFromSeat.z);
                 audio.fadeMusicOut(10);
+                state.remember(); // The desert keeps this walk, and one more pebble by the stones
             },
             update: stageTime => {
                 if (stageTime > 9) ui.fadeOverlay.classList.add('visible');

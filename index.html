@@ -73,6 +73,21 @@
       filter: blur(0);
     }
 
+    /* The traveller's letters: ink on a scrap of paper */
+    #story.letter {
+      border-left: none;
+      border-radius: 3px;
+      background: rgba(238, 228, 206, 0.93);
+      color: #3b2f22;
+      text-shadow: none;
+      font-size: 19px;
+      line-height: 1.6;
+      padding: 18px 24px 19px;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+
     /* On narrow screens, sit above the volume control */
     @media (max-width: 640px) {
       #story { left: 16px; right: 16px; bottom: 84px; max-width: none; font-size: 16px; }
@@ -86,7 +101,7 @@
     #hint {
       position: absolute;
       left: 50%;
-      bottom: 34px;
+      bottom: 150px; /* Above the letters in the corner */
       transform: translate(-50%, 8px);
       color: rgba(255, 250, 240, 0.85);
       font-family: Georgia, 'Times New Roman', serif;

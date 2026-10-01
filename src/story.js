@@ -39,7 +39,7 @@ export class StoryText {
     constructor(element) {
         this.element = element;
         this.remaining = 0;
-        this.pending = null; // { text, duration } waiting for the previous line to fade out
+        this.pending = null; // { text, duration, style } waiting for the previous line to fade out
         this.swapTimer = 0;
     }
 
@@ -47,20 +47,22 @@ export class StoryText {
         return this.remaining > 0 || this.pending !== null;
     }
 
-    show(text, duration = 3) {
+    // style: optional CSS class, e.g. 'letter' for the traveller's handwriting
+    show(text, duration = 3, style = null) {
         if (this.element.classList.contains('visible')) {
             // Let the current line fade out first, then bring in the new one
             this.element.classList.remove('visible');
-            this.pending = { text, duration };
+            this.pending = { text, duration, style };
             this.swapTimer = SWAP_SECONDS;
             this.remaining = 0;
             return;
         }
-        this.reveal(text, duration);
+        this.reveal(text, duration, style);
     }
 
-    reveal(text, duration) {
+    reveal(text, duration, style) {
         this.element.textContent = text;
+        this.element.classList.toggle('letter', style === 'letter');
         this.element.classList.add('visible');
         this.remaining = duration;
     }
@@ -69,9 +71,9 @@ export class StoryText {
         if (this.pending) {
             this.swapTimer -= delta;
             if (this.swapTimer <= 0) {
-                const { text, duration } = this.pending;
+                const { text, duration, style } = this.pending;
                 this.pending = null;
-                this.reveal(text, duration);
+                this.reveal(text, duration, style);
             }
             return;
         }

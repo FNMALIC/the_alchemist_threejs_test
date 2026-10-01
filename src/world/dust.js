@@ -32,11 +32,15 @@ export class Dust {
         this.points.frustumCulled = false; // Always around the camera
     }
 
-    update(delta, elapsed, camera) {
+    // storm: 0 calm .. 1 sandstorm (thicker, larger grains driven much faster)
+    update(delta, elapsed, camera, storm = 0) {
         const positions = this.points.geometry.attributes.position.array;
         const { offsets, drift } = this;
         const box = [BOX.x, BOX.y, BOX.z];
-        const wind = [WIND.x, WIND.y, WIND.z];
+        const force = 1 + storm * 9;
+        const wind = [WIND.x * force, WIND.y * (1 + storm * 3), WIND.z * force];
+        this.points.material.opacity = 0.4 + storm * 0.45;
+        this.points.material.size = 0.08 + storm * 0.1;
         const origin = [camera.position.x - BOX.x / 2, camera.position.y - 3, camera.position.z - BOX.z / 2];
 
         for (let i = 0; i < this.count; i++) {

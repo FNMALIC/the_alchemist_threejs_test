@@ -5,9 +5,14 @@ A short interactive parable in Three.js, inspired by Paulo Coelho's *The Alchemi
 You wake before dawn beneath an old tree at the Al-Fayoum oasis in Egypt. Far away, a light.
 Overhead is the real sky of this morning: the stars, moon and planets where they actually
 are over the oasis today. As you walk, the night turns slowly toward sunrise and the music
-grows. Someone crossed this desert before you; if you wander, you find what they left.
-You reach the light as the sun rises behind it, and it fades away. Their footprints turn
-back toward home. You can follow them, or not. Under the old tree, you can sit.
+grows. Someone crossed this desert before you: at the places they stopped, scraps of a
+letter, weighted with stones, written to someone they left behind. Halfway across, a
+sandstorm takes the stars. You reach the light as the sun rises behind it, and it fades
+away. Their footprints turn back toward home. Under the old tree, by their stones, the
+last letter is waiting. You can sit.
+
+The desert remembers you: the next time you come, your last walk is still faintly in the
+sand, and a pebble lies by the stones for each time you sat there.
 
 The journey matters more than the destination: there is no message at the end.
 
@@ -41,7 +46,9 @@ src/
   render.js           Renderer, tone mapping, shadows, bloom, quality settings
   stages.js           The journey: night, crossing, mirage, morning, rest
   story.js            Story state machine and story text overlay
-  moments.js          Small discoveries along the way: one line each, found by wandering
+  moments.js          Discoveries along the way (lines and letters), shown once when you come near
+  storm.js            The sandstorm partway across: when it rises, how long it lasts
+  memory.js           What the browser remembers between visits: your journeys and your last walk
   player.js           Movement and sand physics: climbing, sliding, sinking, wading, jumping, collisions
   gait.js             Natural head motion while walking (step rhythm, sway, roll, springs)
   orb.js              The light: glowing orb, sound-reactive waves and particles; fades away like a mirage
@@ -55,7 +62,7 @@ src/
     sky.js            The real sky: stars, moon phase, planets, twilight colours, sun and moonlight
     astronomy.js      Sky positions over Al-Fayoum, dawn times, and the walking-driven sky clock
     props.js          Old tree, palms, shrubs, rocks, grass, flowers
-    traces.js         The other traveller: their trail out and back, campfire, well, jar, stack of stones
+    traces.js         The other traveller: their trail, campfire, well, jar, letters, flags, stones; your past walk
     dust.js           Sand drifting on the wind
     sandPatch.js      Detailed sand around the player: footprints and slide grooves pressed in as real dents, slowly filled by the wind
     footprints.js     The footprint trail further away (fades after a few minutes)

@@ -222,7 +222,8 @@ export class JourneyMusic {
     }
 
     // progress: 0..1 along the journey (distance walked); sunAltitude: degrees
-    update(delta, { progress, sunAltitude }) {
+    // storm: 0 calm .. 1 sandstorm (the wind roars and drowns the music)
+    update(delta, { progress, sunAltitude, storm = 0 }) {
         if (!this.started) {
             if (!this.audio.started) return;
             this.start();
@@ -236,20 +237,22 @@ export class JourneyMusic {
 
         // Wind gusts (same rhythm as the swaying palms), a little calmer at dawn
         const gust = 0.6 + 0.4 * Math.sin(this.time * 0.35) + 0.2 * Math.sin(this.time * 1.3 + 1);
-        ease(this.windGain.gain, (0.13 + 0.17 * gust) * (1 - 0.4 * this.dawn), 0.3);
-        ease(this.windFilter.frequency, 300 + 400 * gust, 0.3);
+        const calmWind = (0.13 + 0.17 * gust) * (1 - 0.4 * this.dawn);
+        ease(this.windGain.gain, calmWind + storm * (0.75 + 0.25 * gust), 0.3);
+        ease(this.windFilter.frequency, 300 + 400 * gust + storm * 1400, 0.3);
+        const hush = 1 - 0.88 * storm; // Everything else is drowned by the storm
 
         // The layers come in as the walk goes on
-        this.audio.setTrackLevel?.(0.35 + 0.65 * smoothstep(0.1, 0.45, progress));
-        ease(this.droneGain.gain, 0.05 * smoothstep(0.06, 0.3, progress));
+        this.audio.setTrackLevel?.((0.35 + 0.65 * smoothstep(0.1, 0.45, progress)) * hush);
+        ease(this.droneGain.gain, 0.05 * smoothstep(0.06, 0.3, progress) * hush);
         ease(this.droneFilter.frequency, 240 + 260 * this.dawn + 40 * Math.sin(this.time * 0.15));
         ease(this.thirdGain.gain, 0.5 * this.dawn, 4);
         const melody = smoothstep(0.28, 0.6, progress);
-        ease(this.melodyGain.gain, 0.22 * melody);
+        ease(this.melodyGain.gain, 0.22 * melody * hush);
 
         // Melody phrases, closer together as the walk goes on and the light nears
         this.nextPhrase -= delta;
-        if (melody > 0.02 && this.nextPhrase <= 0) {
+        if (melody > 0.02 && storm < 0.3 && this.nextPhrase <= 0) {
             this.playPhrase();
             this.nextPhrase = (7 - 3.5 * progress) * (0.7 + Math.random() * 0.6);
         }

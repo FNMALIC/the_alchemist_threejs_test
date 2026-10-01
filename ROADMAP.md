@@ -108,6 +108,13 @@ The journey matters more than the destination. Very few words; the world tells t
 - [x] Sit under the old tree (E): the music falls away, the screen whitens, a bird, "Walk again"
 - [x] Footstep sounds turned off for now (`?footsteps=on`)
 
+## Something to feel ✅
+*Goal: the journey had beauty but no feeling. Give it a person, one hard moment, and memory.*
+
+- [x] The traveller's letters: at the campfire, the well, the jar, where the light was and under the tree, a scrap of paper weighted with a stone and marked by a cloth on a stick. The last one reveals who they were writing to.
+- [x] A sandstorm partway across: stars gone, sand-coloured haze, the wind roars over the music and pushes you; then it passes
+- [x] The desert remembers (in this browser): your last walk appears faintly in the sand ("Footprints. Yours."), and a pebble is added by the stones each time you sit
+
 ## Next ideas
 
 - [ ] Daylight details on the way back: things you passed in the dark look different in the morning

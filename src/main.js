@@ -10,6 +10,8 @@ import { StoryDirector, StoryText } from './story.js';
 import { createStages } from './stages.js';
 import { Moments } from './moments.js';
 import { Traces } from './world/traces.js';
+import { Storm } from './storm.js';
+import { loadMemory, saveMemory, PathRecorder } from './memory.js';
 import { Renderer, getQuality } from './render.js';
 
 // The oasis where you wake, and the light far out across the dunes
@@ -91,8 +93,11 @@ player.onLand = strength => {
         world.sandSpray.emit(x, ground, z, Math.cos(angle), Math.sin(angle), 4, 1 + strength * 1.5, 0.3);
     }
 };
-// Someone else walked here before you
-const traces = new Traces(world, world.oldTree.position, ORB_POSITION);
+// Someone else walked here before you. And the desert remembers your earlier walks.
+const memory = loadMemory();
+const traces = new Traces(world, world.oldTree.position, ORB_POSITION, memory);
+const pathRecorder = new PathRecorder();
+const storm = new Storm();
 
 // UI
 const ui = {
@@ -118,20 +123,27 @@ const storyState = {
     distanceToOrb: camera.position.distanceTo(orb.position),
     distanceFromStart: 0,
     distanceToSeat: Infinity,
-    wantsToSit: false
+    wantsToSit: false,
+    remember: () => saveMemory({ journeys: memory.journeys + 1, path: pathRecorder.points })
 };
 const story = new StoryDirector(createStages(storyState), 'night');
 
 // The traveller's traces, found by wandering; their footprints only mean something at night,
 // before you know where they lead
+const onTheWay = () => ['night', 'crossing'].includes(story.current) && storyState.distanceFromStart > 15 &&
+    storyState.distanceToOrb > 30;
 const moments = new Moments(storyText, [
     {
         text: 'Footprints. Not yours.',
-        test: (x, z) => ['night', 'crossing'].includes(story.current) && storyState.distanceFromStart > 15 &&
-            storyState.distanceToOrb > 30 && traces.distanceToTrail(traces.outward, x, z) < 2
+        test: (x, z) => onTheWay() && traces.distanceToTrail(traces.outward, x, z) < 2
+    },
+    {
+        // Your own last walk, if you have been here before
+        text: 'Footprints. Yours.',
+        test: (x, z) => onTheWay() && traces.pastPath.length > 0 && traces.distanceToTrail(traces.pastPath, x, z) < 2
     },
     ...traces.moments
-]);
+], () => story.current);
 
 document.addEventListener('keydown', event => {
     if (event.code === 'KeyE' && story.current === 'morning') storyState.wantsToSit = true;
@@ -167,7 +179,8 @@ function animate() {
     const delta = Math.min(clock.getDelta(), 0.1) * debug.timeScale;
     const elapsed = clock.elapsedTime;
 
-    player.update(delta);
+    // Physics in small steps, even when fast-forwarding
+    for (let remaining = delta; remaining > 1e-6; remaining -= 0.1) player.update(Math.min(remaining, 0.1));
     // Measured from the eye position, so the head's sway doesn't count as walking
     distanceWalked += Math.hypot(player.eye.x - lastPosition.x, player.eye.z - lastPosition.z);
     lastPosition.copy(player.eye);
@@ -187,10 +200,18 @@ function animate() {
     story.update(delta);
     storyText.update(delta);
     moments.update(delta, camera.position.x, camera.position.z);
+    if (['night', 'crossing'].includes(story.current)) pathRecorder.add(player.eye.x, player.eye.z);
+
+    // The storm, partway across: it thickens the air, roars over the music and pushes you
+    const stormIntensity = storm.update(delta, distanceWalked, storyState.distanceToOrb, story.current === 'crossing');
+    world.storm = stormIntensity;
+    player.storm = stormIntensity;
+    const gust = 0.6 + 0.4 * Math.sin(elapsed * 0.35) + 0.2 * Math.sin(elapsed * 1.3 + 1);
+    traces.update(elapsed, gust + stormIntensity * 2);
     world.update(delta, elapsed, camera, distanceWalked);
 
     // The music grows with the walk and turns toward morning at first light
-    music.update(delta, { progress: world.sky.dawnProgress, sunAltitude: world.sky.sunAltitude });
+    music.update(delta, { progress: world.sky.dawnProgress, sunAltitude: world.sky.sunAltitude, storm: stormIntensity });
 
     // Sliding down a dune: a hiss of sand and a spray around the feet
     const slideSpeed = player.slide.length();
@@ -217,5 +238,5 @@ renderer.renderer.setAnimationLoop(animate);
 
 // Dev-only handle for debugging in the browser console (stripped from production builds)
 if (import.meta.env.DEV) {
-    window.mirage = { scene, camera, player, orb, world, story, storyState, renderer: renderer.renderer, music, audio, traces, debug };
+    window.mirage = { scene, camera, player, orb, world, story, storyState, renderer: renderer.renderer, music, audio, traces, debug, storm };
 }
