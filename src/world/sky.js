@@ -1,5 +1,8 @@
 // sky.js - The real sky over the oasis: 5,000 naked-eye stars, the moon in its true phase,
-// the bright planets, and twilight colours driven by the sun's altitude.
+// the bright planets, and twilight colours driven by the sun's altitude. Before dawn, on a dark
+// night: the Milky Way (milkyWay.js), the zodiacal light rising where the sun will, and now and
+// then a shooting star (meteors.js). Stars twinkle low in the sky and hold still overhead;
+// planets don't twinkle, and the brightest (Venus, the morning star, when it is up) glows.
 // Follows the camera so it never gets closer.
 import * as THREE from 'three';
 import { Body } from 'astronomy-engine';
@@ -7,6 +10,8 @@ import starData from '../data/stars.json';
 import {
     SkyFrame, SkyClock, findDawn, horizontalPosition, equatorialVector, brightness, PLANETS
 } from './astronomy.js';
+import { createMilkyWay } from './milkyWay.js';
+import { Meteors } from './meteors.js';
 
 const SKY_RADIUS = 800;
 const STAR_RADIUS = 700;
@@ -83,24 +88,38 @@ const pointVertexShader = /* glsl */`
     uniform float limitingMagnitude;
     uniform float time;
     uniform float pixelRatio;
+    uniform float twinkle; // 1 for stars; 0 for planets, whose discs hold their light steady
     varying vec3 vColor;
     varying float vAlpha;
 
     void main() {
-        // Fade near the horizon, where starlight passes through more air
         vec3 direction = normalize(mat3(modelMatrix) * position);
-        float horizonFade = smoothstep(-0.02, 0.15, direction.y);
+        float horizonFade = smoothstep(-0.02, 0.03, direction.y);
+
+        // Air between us and the star: one airmass overhead, many near the horizon. Low stars
+        // are dimmer (about 0.2 magnitudes per airmass in dry desert air) and redder.
+        float airmass = 1.0 / max(direction.y + 0.025, 0.03);
+        float apparent = magnitude + min(0.2 * (airmass - 1.0), 8.0);
 
         // Fade in and out around the current limiting magnitude
-        float visible = clamp((limitingMagnitude - magnitude) / 1.2, 0.0, 1.0);
-        float intensity = clamp(1.25 - 0.15 * magnitude, 0.3, 1.0);
+        float visible = clamp((limitingMagnitude - apparent) / 1.2, 0.0, 1.0);
+        float intensity = clamp(1.25 - 0.15 * apparent, 0.3, 1.0);
 
-        // Gentle twinkling, stronger low in the sky
-        float twinkleAmount = mix(0.35, 0.1, clamp(direction.y * 2.0, 0.0, 1.0));
-        float twinkle = 1.0 - twinkleAmount * (0.5 + 0.5 * sin(time * (1.5 + seed * 3.0) + seed * 60.0));
+        // Scintillation: turbulent air bends starlight, more the more air it crosses, so stars
+        // shimmer near the horizon and are almost steady overhead. Bright low stars also flash
+        // colours, as the air splits their light.
+        float amount = twinkle * clamp(0.05 * (pow(airmass, 1.5) - 1.0), 0.0, 0.7);
+        float flicker = (sin(time * (7.0 + seed * 5.0) + seed * 60.0)
+            + 0.7 * sin(time * (11.3 + seed * 7.0) + seed * 17.0)
+            + 0.5 * sin(time * (3.1 + seed * 2.0) + seed * 33.0)) / 2.2;
+        float phase = time * (9.0 + seed * 4.0) + seed * 40.0;
+        vec3 flash = vec3(sin(phase), sin(phase + 2.1), sin(phase + 4.2));
+        float colorful = amount * smoothstep(3.0, 8.0, airmass) * (1.0 - smoothstep(0.0, 2.0, apparent));
 
-        vColor = starColor;
-        vAlpha = intensity * visible * horizonFade * twinkle;
+        vec3 reddened = vec3(1.0, exp(-0.03 * (airmass - 1.0)), exp(-0.08 * (airmass - 1.0)));
+        float glare = 1.0 + 0.6 * max(0.0, -apparent - 1.0); // Venus and Jupiter catch the bloom
+        vColor = starColor * reddened * (1.0 + 0.8 * colorful * flash) * glare;
+        vAlpha = intensity * visible * horizonFade * max(0.0, 1.0 + amount * flicker);
 
         gl_PointSize = clamp(3.8 - 0.5 * magnitude, 1.4, 7.0) * pixelRatio;
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
@@ -120,9 +139,10 @@ const pointFragmentShader = /* glsl */`
     }
 `;
 
-function createPointMaterial() {
+function createPointMaterial(twinkle = 1) {
     return new THREE.ShaderMaterial({
         uniforms: {
+            twinkle: { value: twinkle },
             limitingMagnitude: { value: 6 },
             time: { value: 0 },
             pixelRatio: { value: Math.min(window.devicePixelRatio, 2) }
@@ -157,15 +177,23 @@ export class Sky {
 
         this.storm = 0; // 0 clear .. 1 sandstorm (set by World)
         this.stormColor = new THREE.Color();
+        this.eclipticPole = new THREE.Vector3(); // For the zodiacal light, in scene directions
 
         this.group = new THREE.Group();
         this.group.add(this.createDome());
 
         this.starField = this.createStars();
         this.group.add(this.starField);
+        this.milkyWay = createMilkyWay();
+        this.starField.add(this.milkyWay); // Turns with the stars
+
+        this.meteors = new Meteors(this.frame);
+        this.group.add(this.meteors.group);
 
         this.planets = this.createPlanets();
         this.group.add(this.planets);
+        this.planetGlows = this.createPlanetGlows();
+        this.planetGlows.forEach(glow => this.group.add(glow));
 
         this.moon = this.createMoon();
         this.group.add(this.moon);
@@ -203,7 +231,9 @@ export class Sky {
                 zenithColor: { value: this.colors.zenith },
                 horizonColor: { value: this.colors.horizon },
                 glowColor: { value: this.colors.glow },
-                sunDirection: { value: this.sunDirection }
+                sunDirection: { value: this.sunDirection },
+                eclipticPole: { value: this.eclipticPole },
+                zodiacal: { value: 0 }
             },
             vertexShader: /* glsl */`
                 varying vec3 vDirection;
@@ -219,6 +249,8 @@ export class Sky {
                 uniform vec3 horizonColor;
                 uniform vec3 glowColor;
                 uniform vec3 sunDirection;
+                uniform vec3 eclipticPole;
+                uniform float zodiacal;
                 varying vec3 vDirection;
                 void main() {
                     vec3 direction = normalize(vDirection);
@@ -229,6 +261,16 @@ export class Sky {
                     float towardSun = max(dot(normalize(vec3(direction.x, 0.0, direction.z)), flatSun), 0.0);
                     float nearHorizon = 1.0 - smoothstep(0.0, 0.45, abs(direction.y));
                     color += glowColor * pow(towardSun, 4.0) * nearHorizon;
+
+                    // The zodiacal light: sunlight scattered by dust along the plane of the planets.
+                    // Before dawn, a faint tilted cone along the ecliptic, rising where the sun will.
+                    if (zodiacal > 0.0) {
+                        float elongation = acos(clamp(dot(direction, sunDirection), -1.0, 1.0));
+                        float latitude = asin(clamp(dot(direction, eclipticPole), -1.0, 1.0));
+                        float spread = 0.15 + 0.4 * exp(-elongation / 0.5);
+                        float cone = exp(-max(elongation - 0.35, 0.0) / 0.45) * exp(-pow(latitude / spread, 2.0));
+                        color += vec3(1.0, 0.93, 0.8) * cone * zodiacal * smoothstep(0.0, 0.2, direction.y);
+                    }
 
                     color = mix(color, stormColor, stormAmount); // A sandstorm hides the sky
                     gl_FragColor = vec4(color, 1.0);
@@ -287,10 +329,27 @@ export class Sky {
         colors.forEach((hex, i) => new THREE.Color(hex).toArray(colorArray, i * 3));
         geometry.setAttribute('starColor', new THREE.BufferAttribute(colorArray, 3));
 
-        const planets = new THREE.Points(geometry, createPointMaterial());
+        const planets = new THREE.Points(geometry, createPointMaterial(0));
         planets.frustumCulled = false;
         planets.renderOrder = -1;
         return planets;
+    }
+
+    // A soft glow around each planet, seen only around the brightest (Venus, then Jupiter)
+    createPlanetGlows() {
+        const texture = createGlowTexture('rgba(255, 246, 225, 0.8)');
+        return PLANETS.map(() => {
+            const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+                map: texture,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false,
+                fog: false,
+                opacity: 0
+            }));
+            glow.scale.setScalar(26);
+            glow.renderOrder = -1;
+            return glow;
+        });
     }
 
     // The moon, shaded by the real direction of the sun so it shows its true phase
@@ -365,6 +424,9 @@ export class Sky {
         // Stars: rotate the whole field at once
         this.frame.equatorialToScene(date, this.starField.matrix);
         this.starField.matrixWorldNeedsUpdate = true;
+        // The ecliptic's pole (RA 18h, Dec +66.56°), turned the same way
+        equatorialVector(18, 66.5607, this.eclipticPole).applyMatrix4(this.starField.matrix).normalize();
+        this.meteors.updateSources(date);
 
         // Planets
         const planetPositions = this.planets.geometry.attributes.position;
@@ -375,6 +437,7 @@ export class Sky {
             this.frame.direction(azimuth, altitude, direction).multiplyScalar(STAR_RADIUS);
             planetPositions.setXYZ(i, direction.x, direction.y, direction.z);
             planetMagnitudes.setX(i, brightness(body, date).mag);
+            this.planetGlows[i].position.copy(direction);
         });
         planetPositions.needsUpdate = true;
         planetMagnitudes.needsUpdate = true;
@@ -398,6 +461,24 @@ export class Sky {
         [this.starField, this.planets].forEach(points => {
             points.material.uniforms.limitingMagnitude.value = faintest - this.storm * 9;
             points.material.uniforms.time.value = elapsed;
+        });
+
+        // How dark the sky is: no twilight, no moonlight, no blowing sand. Only then do the faint
+        // lights show: the Milky Way first to go as dawn comes, the zodiacal light soon after.
+        const moonlight = this.moonFraction * THREE.MathUtils.smoothstep(this.moonAltitude, -4, 15);
+        const clear = (1 - 0.85 * moonlight) * (1 - this.storm);
+        this.milkyWay.material.uniforms.strength.value = (1 - THREE.MathUtils.smoothstep(sunAltitude, -19, -13)) * clear;
+        this.domeMaterial.uniforms.zodiacal.value = 0.03 * (1 - THREE.MathUtils.smoothstep(sunAltitude, -17, -11)) * clear;
+        this.meteors.dimming = this.storm;
+        this.meteors.update(delta, faintest);
+
+        // The planets' glow, for the brightest only
+        const magnitudes = this.planets.geometry.attributes.magnitude;
+        this.planetGlows.forEach((glow, i) => {
+            const magnitude = magnitudes.getX(i);
+            const up = THREE.MathUtils.smoothstep(glow.position.y / STAR_RADIUS, 0.0, 0.1);
+            const seen = THREE.MathUtils.clamp((faintest - magnitude) / 1.5, 0, 1);
+            glow.material.opacity = THREE.MathUtils.clamp((-magnitude - 1.5) / 3, 0, 1) * up * seen * (1 - this.storm);
         });
 
         // Moon and sun visibility

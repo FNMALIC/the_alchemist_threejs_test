@@ -165,6 +165,15 @@ The journey matters more than the destination. Very few words; the world tells t
 - [x] The first-person hands are gone: nothing between you and the desert
 - [x] Walking is silent: no footsteps, landing or sliding sounds, and no rustles or stone sounds from the environment (the music, wind and birdsong stay)
 
+## A sky to look up at ✅
+*Goal: the sky rewards those who stop and look. Everything follows the real date over Al-Fayoum.*
+
+- [x] Shooting stars at real rates: ~6 an hour on an ordinary night, more during the year's 11 major showers (from their radiants, only while above the horizon), fewer as dawn brightens the sky; you might miss them
+- [x] Stars twinkle with the air they shine through: strongly near the horizon (bright low stars flash colours), almost steady overhead; low stars are dimmer and redder; planets don't twinkle
+- [x] The Milky Way placed by real galactic coordinates, mottled with star clouds and split by the Great Rift, plus the Andromeda galaxy; only on a dark night, washed out by the moon and by twilight
+- [x] The zodiacal light: a faint tilted cone along the ecliptic, rising above where the sun will come up, before twilight begins
+- [x] Venus as the morning star when it is up (from November 2026): the brightest light before sunrise, with a soft glow; Jupiter glows a little too
+
 ## Next ideas
 
 - [ ] Daylight details on the way back: things you passed in the dark look different in the morning

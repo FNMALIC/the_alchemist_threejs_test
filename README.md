@@ -87,7 +87,10 @@ src/
     world.js          Puts the world together: oasis, desert, lights, fog
     terrain.js        Dune height function and ground mesh; the mesh follows you, so the desert never ends
     desertChunks.js   The desert beyond the known one: stones, shrubs and outcrops made (and taken away) as you walk
-    sky.js            The real sky: stars, moon phase, planets, twilight colours, sun and moonlight
+    sky.js            The real sky: stars that twinkle low and hold still overhead, moon phase, planets
+                      (Venus glowing as the morning star), zodiacal light, twilight colours, sun and moonlight
+    milkyWay.js       The Milky Way, placed by galactic coordinates, with the Great Rift and Andromeda
+    meteors.js        Shooting stars at real rates: sporadic ones and the year's showers from their radiants
     astronomy.js      Sky positions over Al-Fayoum, dawn times, and the walking-driven sky clock
     props.js          Old tree, palms, shrubs, rocks, grass, flowers (seeded, for the endless desert)
     traces.js         The other traveller: their trail, campfire, well, jar, letters, stones; your past walk
