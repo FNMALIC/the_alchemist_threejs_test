@@ -30,6 +30,10 @@ Shift to hurry, Space to jump, E to interact with something you are looking at (
 under the old tree, in the morning), Esc to let go of the mouse (click to carry on).
 Headphones recommended.
 
+**On a phone or tablet:** tap to start, hold the left side of the screen to walk (slide your thumb
+up to hurry, down to step back, sideways to step aside), drag on the right side to look around,
+double-tap the right side to jump, and tap "E — sit" or a prompt when it appears.
+
 **Weaker device?** Add `?quality=low` to the URL to turn off bloom and shadows.
 
 **Choose a morning:** add `?date=YYYY-MM-DD` to the URL to see the sky of another day,
@@ -53,7 +57,8 @@ src/
   memory.js           What the browser remembers between visits: your journeys and your last walk
   player/
     playerController.js  The player: input, and the order its parts update in each frame
-    pointerLock.js       Pointer Lock API (Esc releases, click locks again)
+    pointerLock.js       Pointer Lock API (Esc releases, click locks again); on a phone, a tap starts
+    touchControls.js     Phone and tablet: hold the left side to walk, drag the right side to look
     firstPersonCamera.js Mouse look: the body turns (yaw), the head tilts (pitch, clamped)
     movement.js          Movement and sand physics: climbing, sliding, sinking, wading, jumping, collisions
     movementState.js     idle / walking / sprinting / sliding / jumping / falling / landing, with change events

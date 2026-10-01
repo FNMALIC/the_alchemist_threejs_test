@@ -99,7 +99,8 @@ export function getQuality() {
         low,
         bloom: !low,
         shadows: !low,
-        pixelRatio: low ? 1 : Math.min(window.devicePixelRatio, 1.5)
+        // Phones have very dense screens: drawing every pixel would cost far more than it shows
+        pixelRatio: low || window.matchMedia?.('(pointer: coarse)').matches ? 1 : Math.min(window.devicePixelRatio, 1.5)
     };
 }
 

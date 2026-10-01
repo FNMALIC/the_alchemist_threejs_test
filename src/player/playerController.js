@@ -22,6 +22,7 @@ import { MovementState } from './movementState.js';
 import { Breathing } from './breathing.js';
 import { HeadBob } from './headBob.js';
 import { Interaction } from '../interactions/interaction.js';
+import { TouchControls, isTouchDevice } from './touchControls.js';
 
 const KEY_BINDINGS = {
     ArrowUp: 'forward',
@@ -46,13 +47,15 @@ export class PlayerController extends EventDispatcher {
     constructor(camera, domElement, world, { scene = null, interaction = {} } = {}) {
         super();
         this.camera = camera;
-        this.pointerLock = new PointerLock(domElement);
+        this.touch = isTouchDevice();
+        this.pointerLock = new PointerLock(domElement, { touch: this.touch });
         this.view = new FirstPersonCamera(camera);
         this.movement = new Movement(camera.position.clone(), world);
         this.state = new MovementState();
         this.breathing = new Breathing();
         this.head = new HeadBob();
         this.interaction = new Interaction(this, { scene, ...interaction });
+        if (this.touch) this.touchControls = new TouchControls(this, domElement);
 
         // Hooks: onStep(step) when a foot lands, onLand(strength) after a jump (the 'step' and
         // 'land' events say the same, for any number of listeners)

@@ -195,7 +195,14 @@ document.addEventListener('keydown', event => {
     if (event.code === 'KeyE' && story.current === 'morning' && !player.interaction.target) storyState.wantsToSit = true;
 });
 
-// Click to start: lock the pointer and start audio (browsers require a user gesture)
+// On a phone or tablet: how to walk with fingers, and the prompts can be tapped
+if (player.touch) {
+    document.body.classList.add('touch');
+    ui.instructions.innerHTML = 'Tap to start<br>Hold the left side to walk (slide up to hurry) · Drag the right side to look';
+}
+
+// Click (or tap) to start: lock the pointer and start audio (browsers require a user gesture)
+let wakeLock = null;
 document.addEventListener('click', event => {
     // Let the UI controls be used without grabbing the mouse
     if (event.target.closest('#audio-controls, #restart-button')) return;
@@ -203,6 +210,14 @@ document.addEventListener('click', event => {
     if (!player.isLocked) {
         player.lock();
         audio.start();
+        audio.context?.resume?.(); // Phones may start (or bring back) the sound suspended
+        // Keep a phone's screen on during the walk
+        if (player.touch && !wakeLock) {
+            navigator.wakeLock?.request('screen').then(lock => {
+                wakeLock = lock;
+                lock.addEventListener('release', () => { wakeLock = null; });
+            }).catch(() => {});
+        }
     }
 });
 
