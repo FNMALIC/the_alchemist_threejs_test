@@ -63,11 +63,14 @@ let slideDistance = 0;
 const lastPosition = camera.position.clone();
 const audio = new AmbientAudio(`${import.meta.env.BASE_URL}ambient.mp3`);
 const footsteps = new Footsteps(audio);
+// Footstep sounds are switched off for now (they don't sit well with the rest of the world yet);
+// add ?footsteps=on to the URL to hear them
+const FOOTSTEP_SOUNDS = new URLSearchParams(window.location.search).get('footsteps') === 'on';
 const music = new JourneyMusic(audio);
 
 // Every step: a sound, a footprint in the sand, and a few grains kicked back
 player.onStep = step => {
-    footsteps.step(step);
+    if (FOOTSTEP_SOUNDS) footsteps.step(step);
     if (step.surface !== 'sand') return;
     world.sandPatch.stamp(step); // A real dent nearby...
     world.footprints.add(step); // ...and a mark that carries the trail on further away
@@ -76,7 +79,7 @@ player.onStep = step => {
     world.sandSpray.emit(step.x, ground, step.z, backX * 0.6, backZ * 0.6, 5 + Math.floor(step.intensity * 6), 0.9 + step.downhill);
 };
 player.onLand = strength => {
-    footsteps.land(strength);
+    if (FOOTSTEP_SOUNDS) footsteps.land(strength);
     const { x, z } = player.eye;
     const heading = Math.atan2(player.heading.x, player.heading.y);
     [-1, 1].forEach(foot => world.sandPatch.stamp({ x, z, heading, foot }, 1.2 + strength * 0.5));
@@ -165,7 +168,7 @@ function animate() {
 
     // Sliding down a dune: a hiss of sand and a spray around the feet
     const slideSpeed = player.slide.length();
-    footsteps.slide(slideSpeed);
+    if (FOOTSTEP_SOUNDS) footsteps.slide(slideSpeed);
     if (slideSpeed > 0.8) {
         // The feet cut a groove as they slide
         slideDistance += slideSpeed * delta;
