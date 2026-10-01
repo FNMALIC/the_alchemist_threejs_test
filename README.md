@@ -40,7 +40,8 @@ src/
   player.js           Movement and sand physics: climbing, sliding, sinking, wading, jumping, collisions
   gait.js             Natural head motion while walking (step rhythm, sway, roll, springs)
   orb.js              The glowing orb, its sound-reactive waves and particles
-  audio.js            Music, proximity volume fade and reverb
+  audio.js            Background track, proximity volume fade and reverb
+  music.js            Music that grows with the walk: wind, drone, plucked Hijaz melody, key change at first light
   footsteps.js        Footstep (heel, roll, toe-off), splash, landing and sliding sounds, generated in the browser
   effects.js          One-shot particle effects (shatter, transformation)
   data/stars.json     5,070 naked-eye stars (generated, see below)

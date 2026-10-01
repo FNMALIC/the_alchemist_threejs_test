@@ -83,12 +83,12 @@ The journey matters more than the destination:
 - [x] Journey-style glitter: grains flash in the moonlight and sunlight
 - [x] Footstep sound in three phases (heel, roll, toe-off), heavier uphill, skidding downhill, a hiss while sliding
 
-## Phase 5 — Music of the journey
+## Phase 5 — Music of the journey ✅
 *Goal: the music tells the story of the walk.*
 
 - [x] Footsteps generated in the browser: heel thump + sand crunch, alternating left/right, splashes in the pool, a thud on landing; they keep playing when the music fades near the light
-- [ ] Music layers driven by distance walked: wind alone → low drone → melody
-- [ ] A change of key at first light
+- [x] Music layers driven by distance walked: wind in gusts at the oasis → a low drone on D and A → the background track at full → a sparse plucked (Karplus-Strong, oud-like) melody in the Hijaz scale, with a desert echo
+- [x] A change of key at first light: the melody turns to D major pentatonic and the drone gains a major third
 - [ ] Soft chimes near moments along the way (Phase 7)
 
 ## Phase 6 — The look-back ending

@@ -5,6 +5,7 @@ import { Player } from './player.js';
 import { Orb } from './orb.js';
 import { AmbientAudio } from './audio.js';
 import { Footsteps } from './footsteps.js';
+import { JourneyMusic } from './music.js';
 import { Effects } from './effects.js';
 import { StoryDirector, StoryText } from './story.js';
 import { createStages } from './stages.js';
@@ -60,6 +61,7 @@ let distanceWalked = 0;
 const lastPosition = camera.position.clone();
 const audio = new AmbientAudio(`${import.meta.env.BASE_URL}ambient.mp3`);
 const footsteps = new Footsteps(audio);
+const music = new JourneyMusic(audio);
 
 // Every step: a sound, a footprint in the sand, and a few grains kicked back
 player.onStep = step => {
@@ -153,6 +155,9 @@ function animate() {
     effects.update(delta);
     world.update(delta, elapsed, camera, distanceWalked);
 
+    // The music grows with the walk and turns toward morning at first light
+    music.update(delta, { progress: world.sky.dawnProgress, sunAltitude: world.sky.sunAltitude });
+
     // Sliding down a dune: a hiss of sand and a spray around the feet
     const slideSpeed = player.slide.length();
     footsteps.slide(slideSpeed);
@@ -170,5 +175,5 @@ renderer.renderer.setAnimationLoop(animate);
 
 // Dev-only handle for debugging in the browser console (stripped from production builds)
 if (import.meta.env.DEV) {
-    window.mirage = { scene, camera, player, orb, world, story, storyState, renderer: renderer.renderer };
+    window.mirage = { scene, camera, player, orb, world, story, storyState, renderer: renderer.renderer, music, audio };
 }

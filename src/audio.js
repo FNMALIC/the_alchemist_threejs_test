@@ -50,6 +50,11 @@ export class AmbientAudio {
 
         this.analyser.connect(this.dryGain);
         this.analyser.connect(this.wetGain);
+
+        // The background track has its own level, so the journey can bring it in gradually
+        this.trackGain = context.createGain();
+        this.trackGain.gain.value = 0.3;
+        this.trackGain.connect(this.analyser);
         this.dryGain.connect(this.masterGain);
         this.wetGain.connect(this.convolver);
         this.convolver.connect(this.masterGain);
@@ -83,7 +88,7 @@ export class AmbientAudio {
             const music = this.context.createBufferSource();
             music.buffer = audioBuffer;
             music.loop = true;
-            music.connect(this.analyser);
+            music.connect(this.trackGain);
             music.start(0);
         } catch (error) {
             console.error('Error loading audio, falling back to a drone:', error);
@@ -104,7 +109,7 @@ export class AmbientAudio {
             gain.gain.value = 0.05; // Very quiet
 
             oscillator.connect(gain);
-            gain.connect(this.analyser);
+            gain.connect(this.trackGain);
             oscillator.start();
         });
 
@@ -116,6 +121,12 @@ export class AmbientAudio {
         lfo.connect(lfoGain);
         lfoGain.connect(this.masterGain.gain);
         lfo.start();
+    }
+
+    // Level of the background track (0..1), changed smoothly
+    setTrackLevel(level) {
+        if (!this.context) return;
+        this.trackGain.gain.setTargetAtTime(level, this.context.currentTime, 1.5);
     }
 
     setUserVolume(volume) {
