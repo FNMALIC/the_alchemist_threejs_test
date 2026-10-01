@@ -154,6 +154,13 @@ export class AmbientAudio {
         this.effectsGain.gain.setTargetAtTime(this.userVolume, now, 0.1);
     }
 
+    // Let the music go quiet over `seconds` (the wind and other effects carry on)
+    fadeMusicOut(seconds) {
+        if (!this.context) return;
+        this.proximityVolume = 0;
+        this.masterGain.gain.setTargetAtTime(0, this.context.currentTime, seconds / 3);
+    }
+
     swellReverb() {
         if (!this.context) return;
         this.wetGain.gain.setTargetAtTime(1.0, this.context.currentTime, 0.5);

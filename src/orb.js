@@ -1,4 +1,5 @@
-// orb.js - The glowing orb (the "treasure") with sound-reactive waves and orbiting particles
+// orb.js - The light on the horizon: a glowing orb with sound-reactive waves and orbiting
+// particles. When you reach it at sunrise it fades away like a mirage (fadeAway).
 import * as THREE from 'three';
 import { createGlowTexture } from './world/sky.js';
 
@@ -15,6 +16,8 @@ export class Orb {
         this.mesh = new THREE.Mesh(new THREE.SphereGeometry(0.5, 32, 32), this.material);
         this.mesh.position.copy(position);
         this.baseHeight = position.y;
+        this.fade = 1; // 1 = fully there, 0 = gone
+        this.fadeSeconds = 0;
 
         this.waves = this.createWaves();
         this.mesh.add(this.waves);
@@ -119,8 +122,26 @@ export class Orb {
         });
     }
 
+    // Fade away over the given number of seconds, its motes drifting up and apart
+    fadeAway(seconds) {
+        this.fadeSeconds = seconds;
+        this.material.transparent = true;
+    }
+
+    get fading() {
+        return this.fadeSeconds > 0;
+    }
+
     update(delta, elapsed, frequencyData) {
         if (!this.visible) return;
+
+        if (this.fadeSeconds > 0) {
+            this.fade = Math.max(0, this.fade - delta / this.fadeSeconds);
+            if (this.fade === 0) {
+                this.hide();
+                return;
+            }
+        }
 
         this.mesh.rotation.y += 0.6 * delta;
         this.mesh.position.y = this.baseHeight + Math.sin(elapsed * 0.8) * 0.15; // Gentle hovering
@@ -144,13 +165,24 @@ export class Orb {
             userData.theta += 0.6 * userData.speed * delta;
 
             const pulseFactor = Math.sin(elapsed * userData.speed) * 0.1;
-            const radius = userData.originalRadius * (1 + pulseFactor);
+            const dispersal = 1 + (1 - this.fade) * 3; // Motes drift apart as the light fades
+            const radius = userData.originalRadius * (1 + pulseFactor) * dispersal;
 
             particle.position.set(
                 radius * Math.sin(userData.phi) * Math.cos(userData.theta),
-                radius * Math.sin(userData.phi) * Math.sin(userData.theta),
+                radius * Math.sin(userData.phi) * Math.sin(userData.theta) + (1 - this.fade) * 2 * userData.speed,
                 radius * Math.cos(userData.phi)
             );
         });
+
+        // Everything dims together as it fades
+        if (this.fade < 1) {
+            const fade = this.fade;
+            this.material.opacity = fade;
+            this.material.emissiveIntensity *= fade;
+            this.glow.material.opacity = fade * fade;
+            this.waves.children.forEach(wave => { wave.material.opacity *= fade; });
+            this.particles.children.forEach(particle => { particle.material.opacity *= fade; });
+        }
     }
 }

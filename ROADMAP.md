@@ -5,12 +5,13 @@ light across the desert and discovers that the walk itself was the treasure.
 
 ## The journey we're building
 
-The journey matters more than the destination:
+The journey matters more than the destination. Very few words; the world tells the story.
 
-1. **Departure** — you wake before dawn beneath an old tree at the Al-Fayoum oasis. A distant light pulses on the horizon.
-2. **The crossing** — the real night sky turns overhead and slowly gives way to dawn as you walk. The music grows with every stretch; small moments wait for those who wander.
-3. **The light** — you reach it as the sun rises behind it, and it breaks apart.
-4. **Looking back** — you turn around: your footprints glow all the way back to the oasis. The walk was the treasure.
+1. **Night** — you wake beneath an old tree at the Al-Fayoum oasis. *Far away, a light.*
+2. **The crossing** — the real sky turns overhead and gives way to dawn as you walk; the music grows. Someone walked here before you: their old footprints, a cold campfire, a dry well, a water jar.
+3. **The mirage** — you reach the light as the sun rises behind it, and it fades away. *Their footprints turn back here.*
+4. **Morning** — follow them home, or don't.
+5. **Rest** — under the old tree, beside their small stack of stones, you can sit. The music falls away, the light whitens, a bird. Nothing more.
 
 ---
 
@@ -96,21 +97,23 @@ The journey matters more than the destination:
 - [x] Footsteps generated in the browser: heel thump + sand crunch, alternating left/right, splashes in the pool, a thud on landing; they keep playing when the music fades near the light
 - [x] Music layers driven by distance walked: wind in gusts at the oasis → a low drone on D and A → the background track at full → a sparse plucked (Karplus-Strong, oud-like) melody in the Hijaz scale, with a desert echo
 - [x] A change of key at first light: the melody turns to D major pentatonic and the drone gains a major third
-- [ ] Soft chimes near moments along the way (Phase 7)
+- [ ] Soft chimes near the traces along the way
 
-## Phase 6 — The look-back ending
-*Goal: the final image is your own path, not the destination.*
+## The story, rewritten ✅
+*Goal: the journey is the story; the ending is quiet and empty.*
 
-- [x] Footprints left in the sand as you walk
-- [ ] At the end, the story asks you to turn around; your trail glows all the way back to the oasis
-- [ ] Epilogue that reflects on *your* walk (distance, moments found), then the fade
+- [x] Five stages: night, crossing, mirage, morning, rest; only three short lines from the story itself
+- [x] The other traveller, told only through traces: their half-erased trail out to the light and back home, a cold campfire, a dry well, a water jar, a stack of stones under the old tree; each trace has one line, found only by wandering
+- [x] The light fades into the sunrise (no shatter, no explanation)
+- [x] Sit under the old tree (E): the music falls away, the screen whitens, a bird, "Walk again"
+- [x] Footstep sounds turned off for now (`?footsteps=on`)
 
-## Phase 7 — Moments along the way
-*Goal: reward wandering; nothing blocks the ending.*
+## Next ideas
 
-- [ ] 4–5 optional discoveries off the straight path (a cold campfire, a camel skull, a half-buried jar, a lone flower, someone else's footprints), each with a short reflective line
+- [ ] Daylight details on the way back: things you passed in the dark look different in the morning
+- [ ] Morning sounds at the oasis (birds, water)
 
-## Phase 8 — Polish
+## Polish
 
 - [ ] Title screen, pause on `Esc`, subtitle/volume menu
 - [ ] Performance pass: instanced flowers and shrubs, measure on real laptops (target 60fps)

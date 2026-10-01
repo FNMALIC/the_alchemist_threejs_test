@@ -86,7 +86,8 @@ export class World {
         const { x: ox, z: oz, poolX, poolZ } = this.oasis;
         const heightAt = this.heightAt;
 
-        this.oldTree = this.add(createOldTree(ox - 4.5, oz + 3.5, heightAt));
+        // The old tree, just beside where you wake, on dry sand above the pool
+        this.oldTree = this.add(createOldTree(ox - 2.5, oz + 5.5, heightAt));
 
         // Pool: still water in the hollow that mirrors the sky
         const water = new THREE.Mesh(
@@ -118,7 +119,7 @@ export class World {
             );
             this.grassPatches.push(this.add(grass));
         }
-        this.grassPatches.push(this.add(createGrassPatch(ox - 4.5, oz + 3.5, 3, heightAt)));
+        this.grassPatches.push(this.add(createGrassPatch(ox - 2.5, oz + 5.5, 3, heightAt)));
 
         for (let i = 0; i < 12; i++) {
             const angle = Math.random() * Math.PI * 2;

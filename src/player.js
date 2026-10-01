@@ -43,6 +43,7 @@ const LOOSE_FRICTION = Math.tan(22 * Math.PI / 180); // Going down, or already s
 const SAND_DRAG = 0.6; // Extra slowing while sliding, per second
 const SINK_DEPTH = 0.04; // Metres the feet sink into soft sand
 const WADING_SPEED = 0.5; // Fraction of normal speed in the pool
+const SITTING_EYE_HEIGHT = 0.95;
 
 export class Player {
     // groundHeightAt(x, z): terrain height; bounds: { minX, maxX, minZ, maxZ } the player stays within
@@ -76,6 +77,7 @@ export class Player {
         this.speed = 0; // Horizontal ground speed (m/s), walking and sliding combined
 
         this.gait = new Gait();
+        this.seated = null; // { x, z, lookX, lookZ, time } once sitting down
         this.appliedRoll = 0;
         this.sideways = new THREE.Vector3();
         this.gradient = new THREE.Vector2();
@@ -110,6 +112,7 @@ export class Player {
     }
 
     jump() {
+        if (this.seated) return;
         const { x, z } = this.eye;
         if (!this.controls.isLocked || !this.grounded || this.isUnderWater(x, z)) return; // No jumping out of water
         this.verticalSpeed = JUMP_SPEED;
@@ -133,11 +136,24 @@ export class Player {
         );
     }
 
+    // Sit down at (x, z), turning gently to face (lookX, lookZ). There is no getting up.
+    sit(x, z, lookX, lookZ) {
+        this.seated = { x, z, lookX, lookZ, time: 0 };
+        this.velocity.set(0, 0, 0);
+        this.slide.set(0, 0);
+        Object.keys(this.moving).forEach(key => { this.moving[key] = false; });
+    }
+
     update(delta) {
         // Work from the eye position, without last frame's walking motion
         this.camera.position.copy(this.eye);
         this.camera.rotateZ(-this.appliedRoll);
         this.appliedRoll = 0;
+
+        if (this.seated) {
+            this.sitDown(delta);
+            return;
+        }
 
         const before = this.camera.position.clone();
         const walking = this.controls.isLocked && this.walk(delta);
@@ -305,6 +321,25 @@ export class Player {
             this.gait.impulse(0.6 + strength * 0.8); // Knees absorb the landing
             this.onLand?.(strength);
         }
+    }
+
+    // Lower the eye to the seat over a few seconds and turn toward the view; looking around is still free
+    sitDown(delta) {
+        const seat = this.seated;
+        seat.time += delta;
+        const ease = Math.min(1, delta * 1.5);
+        const target = new THREE.Vector3(seat.x, this.groundHeightAt(seat.x, seat.z) + SITTING_EYE_HEIGHT, seat.z);
+        this.camera.position.lerp(target, ease);
+
+        if (seat.time < 3) {
+            const view = new THREE.Object3D();
+            view.position.copy(this.camera.position);
+            view.lookAt(seat.lookX, this.camera.position.y + 0.5, seat.lookZ);
+            view.rotateY(Math.PI); // Object3D.lookAt points +Z at the target; cameras look down -Z
+            this.camera.quaternion.slerp(view.quaternion, Math.min(1, delta * 1.2));
+        }
+        this.eye.copy(this.camera.position);
+        this.speed = 0;
     }
 
     // The walking motion of the head, applied on top of the eye position

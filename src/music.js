@@ -195,6 +195,32 @@ export class JourneyMusic {
         }
     }
 
+    // A small bird somewhere in the palms: a few quick rising chirps
+    birdsong() {
+        if (!this.started) return;
+        const context = this.context;
+        let at = context.currentTime + 0.1;
+        const chirps = 3 + Math.floor(Math.random() * 3);
+        for (let i = 0; i < chirps; i++) {
+            const oscillator = context.createOscillator();
+            oscillator.type = 'sine';
+            const base = 2600 + Math.random() * 900;
+            oscillator.frequency.setValueAtTime(base, at);
+            oscillator.frequency.exponentialRampToValueAtTime(base * 1.45, at + 0.07);
+            oscillator.frequency.exponentialRampToValueAtTime(base * 1.1, at + 0.11);
+            const gain = context.createGain();
+            gain.gain.setValueAtTime(0, at);
+            gain.gain.linearRampToValueAtTime(0.06, at + 0.015);
+            gain.gain.exponentialRampToValueAtTime(0.0005, at + 0.12);
+            const panner = context.createStereoPanner();
+            panner.pan.value = 0.4;
+            oscillator.connect(gain).connect(panner).connect(this.audio.effectsGain);
+            oscillator.start(at);
+            oscillator.stop(at + 0.15);
+            at += 0.14 + Math.random() * 0.12;
+        }
+    }
+
     // progress: 0..1 along the journey (distance walked); sunAltitude: degrees
     update(delta, { progress, sunAltitude }) {
         if (!this.started) {

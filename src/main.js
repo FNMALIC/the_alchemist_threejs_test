@@ -6,9 +6,10 @@ import { Orb } from './orb.js';
 import { AmbientAudio } from './audio.js';
 import { Footsteps } from './footsteps.js';
 import { JourneyMusic } from './music.js';
-import { Effects } from './effects.js';
 import { StoryDirector, StoryText } from './story.js';
 import { createStages } from './stages.js';
+import { Moments } from './moments.js';
+import { Traces } from './world/traces.js';
 import { Renderer, getQuality } from './render.js';
 
 // The oasis where you wake, and the light far out across the dunes
@@ -45,7 +46,8 @@ const world = new World(scene, {
 const orb = new Orb(ORB_POSITION);
 scene.add(orb.mesh);
 
-const orbLight = new THREE.PointLight(0xffcc66, 40, 35, 2);
+const ORB_LIGHT_INTENSITY = 40;
+const orbLight = new THREE.PointLight(0xffcc66, ORB_LIGHT_INTENSITY, 35, 2);
 orbLight.castShadow = false; // Point light shadows are expensive (six renders per frame)
 orbLight.position.copy(ORB_POSITION);
 scene.add(orbLight);
@@ -89,7 +91,8 @@ player.onLand = strength => {
         world.sandSpray.emit(x, ground, z, Math.cos(angle), Math.sin(angle), 4, 1 + strength * 1.5, 0.3);
     }
 };
-const effects = new Effects(scene, camera, world.heightAt);
+// Someone else walked here before you
+const traces = new Traces(world, world.oldTree.position, ORB_POSITION);
 
 // UI
 const ui = {
@@ -97,6 +100,7 @@ const ui = {
     story: document.getElementById('story'),
     fadeOverlay: document.getElementById('fade-overlay'),
     restartButton: document.getElementById('restart-button'),
+    hint: document.getElementById('hint'),
     volumeSlider: document.getElementById('volume-slider')
 };
 const storyText = new StoryText(ui.story);
@@ -105,15 +109,33 @@ const storyText = new StoryText(ui.story);
 const storyState = {
     orb,
     audio,
-    effects,
+    music,
     storyText,
     ui,
-    lights: { orb: orbLight },
-    distanceToOrb: camera.position.distanceTo(orb.position),
     sky: world.sky,
-    distanceFromStart: 0
+    player,
+    traces,
+    distanceToOrb: camera.position.distanceTo(orb.position),
+    distanceFromStart: 0,
+    distanceToSeat: Infinity,
+    wantsToSit: false
 };
-const story = new StoryDirector(createStages(storyState), 'intro');
+const story = new StoryDirector(createStages(storyState), 'night');
+
+// The traveller's traces, found by wandering; their footprints only mean something at night,
+// before you know where they lead
+const moments = new Moments(storyText, [
+    {
+        text: 'Footprints. Not yours.',
+        test: (x, z) => ['night', 'crossing'].includes(story.current) && storyState.distanceFromStart > 15 &&
+            storyState.distanceToOrb > 30 && traces.distanceToTrail(traces.outward, x, z) < 2
+    },
+    ...traces.moments
+]);
+
+document.addEventListener('keydown', event => {
+    if (event.code === 'KeyE' && story.current === 'morning') storyState.wantsToSit = true;
+});
 
 // Click to start: lock the pointer and start audio (browsers require a user gesture)
 document.addEventListener('click', event => {
@@ -138,10 +160,11 @@ ui.restartButton.addEventListener('click', () => window.location.reload());
 
 // Main loop
 const clock = new THREE.Clock();
+const debug = { timeScale: 1 }; // Dev only: fast-forward the experience from the console
 
 function animate() {
     // Clamp so a paused/background tab doesn't cause a huge jump
-    const delta = Math.min(clock.getDelta(), 0.1);
+    const delta = Math.min(clock.getDelta(), 0.1) * debug.timeScale;
     const elapsed = clock.elapsedTime;
 
     player.update(delta);
@@ -149,18 +172,21 @@ function animate() {
     distanceWalked += Math.hypot(player.eye.x - lastPosition.x, player.eye.z - lastPosition.z);
     lastPosition.copy(player.eye);
 
-    storyState.distanceToOrb = camera.position.distanceTo(orb.position);
+    storyState.distanceToOrb = Math.hypot(camera.position.x - orb.position.x, camera.position.z - orb.position.z);
     storyState.distanceFromStart = Math.hypot(camera.position.x - PLAYER_START.x, camera.position.z - PLAYER_START.z);
+    storyState.distanceToSeat = Math.hypot(camera.position.x - traces.seat.x, camera.position.z - traces.seat.z);
     if (orb.visible) {
-        const proximity = Math.max(0, 1 - (storyState.distanceToOrb / PROXIMITY_RANGE));
+        // As the light fades away, the music comes back from its hush
+        const proximity = Math.max(0, 1 - (storyState.distanceToOrb / PROXIMITY_RANGE)) * orb.fade;
         orb.setProximity(proximity, elapsed);
         audio.setProximity(proximity);
     }
     orb.update(delta, elapsed, audio.getFrequencyData());
+    orbLight.intensity = orb.visible ? ORB_LIGHT_INTENSITY * orb.fade : 0;
 
     story.update(delta);
     storyText.update(delta);
-    effects.update(delta);
+    moments.update(delta, camera.position.x, camera.position.z);
     world.update(delta, elapsed, camera, distanceWalked);
 
     // The music grows with the walk and turns toward morning at first light
@@ -191,5 +217,5 @@ renderer.renderer.setAnimationLoop(animate);
 
 // Dev-only handle for debugging in the browser console (stripped from production builds)
 if (import.meta.env.DEV) {
-    window.mirage = { scene, camera, player, orb, world, story, storyState, renderer: renderer.renderer, music, audio };
+    window.mirage = { scene, camera, player, orb, world, story, storyState, renderer: renderer.renderer, music, audio, traces, debug };
 }

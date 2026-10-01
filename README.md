@@ -2,11 +2,14 @@
 
 A short interactive parable in Three.js, inspired by Paulo Coelho's *The Alchemist*.
 
-You wake before dawn beneath an old tree at the Al-Fayoum oasis in Egypt. Far across
-the dunes, a light is pulsing. Overhead is the real sky of this morning: the stars,
-moon and planets where they actually are over the oasis today. As you walk, the night
-turns slowly toward sunrise, the mist lifts and the world grows quiet and echoing,
-until you reach the light as the sun rises behind it.
+You wake before dawn beneath an old tree at the Al-Fayoum oasis in Egypt. Far away, a light.
+Overhead is the real sky of this morning: the stars, moon and planets where they actually
+are over the oasis today. As you walk, the night turns slowly toward sunrise and the music
+grows. Someone crossed this desert before you; if you wander, you find what they left.
+You reach the light as the sun rises behind it, and it fades away. Their footprints turn
+back toward home. You can follow them, or not. Under the old tree, you can sit.
+
+The journey matters more than the destination: there is no message at the end.
 
 ## Running it
 
@@ -18,7 +21,8 @@ npm run preview   # serve the production build
 ```
 
 **Controls:** click to start, move the mouse to look around, WASD / arrow keys to walk,
-Shift to hurry, Space to jump. Headphones recommended.
+Shift to hurry, Space to jump, E to sit (under the old tree, in the morning).
+Headphones recommended.
 
 **Weaker device?** Add `?quality=low` to the URL to turn off bloom and shadows.
 
@@ -35,15 +39,15 @@ scripts/
 src/
   main.js             Scene setup and main loop
   render.js           Renderer, tone mapping, shadows, bloom, quality settings
-  stages.js           The stages of the journey (story text and what happens at each stage)
+  stages.js           The journey: night, crossing, mirage, morning, rest
   story.js            Story state machine and story text overlay
+  moments.js          Small discoveries along the way: one line each, found by wandering
   player.js           Movement and sand physics: climbing, sliding, sinking, wading, jumping, collisions
   gait.js             Natural head motion while walking (step rhythm, sway, roll, springs)
-  orb.js              The glowing orb, its sound-reactive waves and particles
+  orb.js              The light: glowing orb, sound-reactive waves and particles; fades away like a mirage
   audio.js            Background track, proximity volume fade and reverb
   music.js            Music that grows with the walk: wind, drone, plucked Hijaz melody, key change at first light
   footsteps.js        Footstep (heel, roll, toe-off), splash, landing and sliding sounds, generated in the browser
-  effects.js          One-shot particle effects (shatter, transformation)
   data/stars.json     5,070 naked-eye stars (generated, see below)
   world/
     world.js          Puts the world together: oasis, desert, lights, fog
@@ -51,6 +55,7 @@ src/
     sky.js            The real sky: stars, moon phase, planets, twilight colours, sun and moonlight
     astronomy.js      Sky positions over Al-Fayoum, dawn times, and the walking-driven sky clock
     props.js          Old tree, palms, shrubs, rocks, grass, flowers
+    traces.js         The other traveller: their trail out and back, campfire, well, jar, stack of stones
     dust.js           Sand drifting on the wind
     sandPatch.js      Detailed sand around the player: footprints and slide grooves pressed in as real dents, slowly filled by the wind
     footprints.js     The footprint trail further away (fades after a few minutes)
@@ -58,8 +63,10 @@ src/
 ```
 
 In dev mode (`npm run dev`), `window.mirage` exposes the scene, camera, player, world and
-story for debugging in the browser console, e.g. `mirage.story.goTo('touch')` or
-`mirage.world.sky.clock.progress = 0.9`.
+story for debugging in the browser console, e.g. `mirage.story.goTo('mirage')`,
+`mirage.world.sky.clock.progress = 0.9`, or `mirage.debug.timeScale = 4` to fast-forward.
+
+Footstep sounds are off for now; add `?footsteps=on` to the URL to hear them.
 
 ### Adding to the story
 

@@ -49,7 +49,9 @@ function createFootprintTexture() {
 
 export class Footprints {
     // hole: { center, half } uniforms of the detailed sand patch, where real dents take over
-    constructor(heightAt, hole) {
+    //   (null: drawn everywhere, e.g. someone else's old trail)
+    // options.ageing: fade with age (the wind covering them); options.strength: 0..1 how dark
+    constructor(heightAt, hole, { ageing = true, strength = 1, name = 'player' } = {}) {
         this.heightAt = heightAt;
         this.next = 0;
         this.time = { value: 0 };
@@ -76,8 +78,10 @@ export class Footprints {
         const time = this.time;
         material.onBeforeCompile = shader => {
             shader.uniforms.printTime = time;
-            shader.uniforms.holeCenter = hole.center;
-            shader.uniforms.holeHalf = hole.half;
+            if (hole) {
+                shader.uniforms.holeCenter = hole.center;
+                shader.uniforms.holeHalf = hole.half;
+            }
             shader.vertexShader = shader.vertexShader
                 .replace('#include <common>', `#include <common>
                     attribute float birth;
@@ -85,7 +89,9 @@ export class Footprints {
                     varying float vPrintFade;
                     varying vec2 vPrintPosition;`)
                 .replace('#include <project_vertex>', `#include <project_vertex>
-                    vPrintFade = 1.0 - smoothstep(${FADE_START.toFixed(1)}, ${FADE_END.toFixed(1)}, printTime - birth);
+                    vPrintFade = ${ageing
+                        ? `1.0 - smoothstep(${FADE_START.toFixed(1)}, ${FADE_END.toFixed(1)}, printTime - birth)`
+                        : '1.0'} * ${strength.toFixed(2)};
                     vPrintPosition = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xz;`);
             shader.fragmentShader = shader.fragmentShader
                 .replace('#include <common>', `#include <common>
@@ -94,10 +100,12 @@ export class Footprints {
                     varying float vPrintFade;
                     varying vec2 vPrintPosition;`)
                 .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
-                    if (all(lessThan(abs(vPrintPosition - holeCenter), vec2(holeHalf - ${PATCH_EDGE.toFixed(1)})))) discard;`)
+                    ${hole ? `if (all(lessThan(abs(vPrintPosition - holeCenter), vec2(holeHalf - ${PATCH_EDGE.toFixed(1)})))) discard;` : ''}`)
                 .replace('#include <map_fragment>', `#include <map_fragment>
                     diffuseColor.rgb = mix(vec3(1.0), diffuseColor.rgb, vPrintFade); // White leaves the sand unchanged`);
         };
+
+        material.customProgramCacheKey = () => `footprints-${name}`; // Each kind compiles its own shader
 
         this.mesh = new THREE.InstancedMesh(geometry, material, MAX_PRINTS);
         this.mesh.count = 0;
@@ -114,7 +122,7 @@ export class Footprints {
     }
 
     // x, z: where the body is; heading: travel direction angle (atan2(dx, dz)); foot: 1 right, -1 left
-    add({ x, z, heading, foot }) {
+    add({ x, z, heading, foot, lift = 0.02 }) {
         const hx = Math.sin(heading), hz = Math.cos(heading);
         // Each foot lands a little to its side of the centre line, turned out slightly
         const px = x + -hz * foot * FOOT_SPACING;
@@ -130,7 +138,7 @@ export class Footprints {
 
         this.yaw.setFromAxisAngle(this.up, Math.atan2(-hx, -hz) - turnOut);
         this.tilt.setFromUnitVectors(this.up, this.normal).multiply(this.yaw);
-        this.position.set(px, this.heightAt(px, pz) + 0.02, pz);
+        this.position.set(px, this.heightAt(px, pz) + lift, pz);
         const size = 0.95 + Math.random() * 0.1;
         this.scale.set(foot < 0 ? -size : size, 1, size); // Mirror the left foot
 

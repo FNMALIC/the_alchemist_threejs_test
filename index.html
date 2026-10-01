@@ -82,10 +82,28 @@
       #story { transform: none; filter: none; transition: opacity 0.4s ease; }
     }
 
+    /* A quiet prompt, e.g. "E — sit" under the old tree */
+    #hint {
+      position: absolute;
+      left: 50%;
+      bottom: 34px;
+      transform: translate(-50%, 8px);
+      color: rgba(255, 250, 240, 0.85);
+      font-family: Georgia, 'Times New Roman', serif;
+      font-size: 15px;
+      font-style: italic;
+      letter-spacing: 0.04em;
+      text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 1.2s ease, transform 1.2s ease;
+    }
+    #hint.visible { opacity: 1; transform: translate(-50%, 0); }
+
     #fade-overlay {
       position: absolute;
       inset: 0;
-      background-color: white;
+      background-color: #f4ecdd; /* Warm, like morning light */
       opacity: 0;
       transition: opacity 8s;
       pointer-events: none;
@@ -115,8 +133,9 @@
 </div>
 <div id="instructions">Click to start<br>WASD / Arrow Keys to walk · Shift to hurry · Space to jump</div>
 <div id="story"></div>
+<div id="hint">E — sit</div>
 <div id="fade-overlay"></div>
-<button id="restart-button">Experience Again</button>
+<button id="restart-button">Walk again</button>
 <script type="module" src="./src/main.js"></script>
 </body>
 </html>
