@@ -175,6 +175,22 @@
       #interaction-prompt, #interaction-prompt.visible { transform: translate(-50%, 0); }
     }
 
+    /* A constellation's name, beside its figure while the gaze rests on it */
+    #constellation {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      white-space: nowrap;
+      color: rgba(255, 226, 176, 0.95);
+      font-family: Georgia, 'Times New Roman', serif;
+      text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
+      pointer-events: none;
+      opacity: 0;
+    }
+    #constellation .name { display: block; font-size: 17px; letter-spacing: 0.18em; text-transform: uppercase; }
+    #constellation .meaning { display: block; margin-top: 3px; font-size: 14px; font-style: italic; opacity: 0.75; }
+    #constellation .meaning:empty { display: none; }
+
     /* A quiet prompt, e.g. "E — sit" under the old tree */
     #hint {
       position: absolute;
@@ -228,6 +244,7 @@
 <div id="crosshair" aria-hidden="true"></div>
 <div id="interaction-prompt"><span class="key">E</span><span class="label"></span></div>
 <div id="story"></div>
+<div id="constellation" aria-live="polite"><span class="name"></span><span class="meaning"></span></div>
 <div id="hint">E — sit</div>
 <div id="fade-overlay"></div>
 <button id="restart-button">Walk again</button>

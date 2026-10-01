@@ -173,6 +173,7 @@ The journey matters more than the destination. Very few words; the world tells t
 - [x] The Milky Way placed by real galactic coordinates, mottled with star clouds and split by the Great Rift, plus the Andromeda galaxy; only on a dark night, washed out by the moon and by twilight
 - [x] The zodiacal light: a faint tilted cone along the ecliptic, rising above where the sun will come up, before twilight begins
 - [x] Venus as the morning star when it is up (from November 2026): the brightest light before sunrise, with a soft glow; Jupiter glows a little too
+- [x] Constellations: rest the centre dot on one for a moment and its figure draws itself from star to star (each star ringed as the line reaches it), then its name and meaning appear below it ("Aries, the Ram"); all 88, only on a dark enough night, above the horizon and with nothing in the way; looking away fades it
 
 ## Next ideas
 

@@ -166,6 +166,7 @@ export class Sky {
         this.sunDirection = new THREE.Vector3();
         this.moonDirection = new THREE.Vector3();
         this.sunAltitude = -18;
+        this.faintestMagnitude = 6; // Faintest star visible now (twilight and storm included)
         this.moonAltitude = -90;
         this.moonFraction = 0;
         this.lastUpdate = -Infinity;
@@ -469,6 +470,7 @@ export class Sky {
         const clear = (1 - 0.85 * moonlight) * (1 - this.storm);
         this.milkyWay.material.uniforms.strength.value = (1 - THREE.MathUtils.smoothstep(sunAltitude, -19, -13)) * clear;
         this.domeMaterial.uniforms.zodiacal.value = 0.03 * (1 - THREE.MathUtils.smoothstep(sunAltitude, -17, -11)) * clear;
+        this.faintestMagnitude = faintest - this.storm * 9;
         this.meteors.dimming = this.storm;
         this.meteors.update(delta, faintest);
 

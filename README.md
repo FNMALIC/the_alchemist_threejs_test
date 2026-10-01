@@ -42,6 +42,7 @@ index.html            Page, UI elements and styles
 public/ambient.mp3    Background music
 scripts/
   build-stars.mjs     Generates src/data/stars.json from the HYG star database
+  build-constellations.mjs  Generates src/data/constellations.json from d3-celestial
 src/
   main.js             Scene setup and main loop
   render.js           Renderer, tone mapping, shadows, bloom, quality settings
@@ -91,6 +92,7 @@ src/
                       (Venus glowing as the morning star), zodiacal light, twilight colours, sun and moonlight
     milkyWay.js       The Milky Way, placed by galactic coordinates, with the Great Rift and Andromeda
     meteors.js        Shooting stars at real rates: sporadic ones and the year's showers from their radiants
+    constellations.js Rest your gaze on a constellation and its figure draws itself, then its name
     astronomy.js      Sky positions over Al-Fayoum, dawn times, and the walking-driven sky clock
     props.js          Old tree, palms, shrubs, rocks, grass, flowers (seeded, for the endless desert)
     traces.js         The other traveller: their trail, campfire, well, jar, letters, stones; your past walk
@@ -205,10 +207,20 @@ The journey is a list of stages in `src/stages.js`. Each stage can define:
 node scripts/build-stars.mjs path/to/hyg_v38.csv.gz
 ```
 
+`src/data/constellations.json` (the figures of all 88 constellations and their names) is generated
+from [d3-celestial](https://github.com/ofrohn/d3-celestial)'s `data/constellations.lines.json` and
+`data/constellations.json`:
+
+```bash
+node scripts/build-constellations.mjs path/to/constellations.lines.json path/to/constellations.json
+```
+
 ## Credits
 
 - Star data: HYG database, [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
   `src/data/stars.json` is a derived work under the same licence.
+- Constellation figures and names: [d3-celestial](https://github.com/ofrohn/d3-celestial) by
+  Olaf Frohn, BSD 3-clause licence (Copyright (c) 2015, Olaf Frohn).
 - Sun, moon and planet positions: [astronomy-engine](https://github.com/cosinekitty/astronomy)
   by Don Cross, MIT licence.
 

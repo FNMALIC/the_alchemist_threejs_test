@@ -9,6 +9,7 @@ import { StoryDirector, StoryText } from './story.js';
 import { createStages } from './stages.js';
 import { Moments } from './moments.js';
 import { Traces } from './world/traces.js';
+import { Constellations } from './world/constellations.js';
 import { Storm } from './storm.js';
 import { loadMemory, saveMemory, PathRecorder } from './memory.js';
 import { Renderer, getQuality } from './render.js';
@@ -122,6 +123,8 @@ const ui = {
     interactionPrompt: document.getElementById('interaction-prompt')
 };
 const storyText = new StoryText(ui.story);
+// Rest your gaze on a constellation and its figure draws itself
+const constellations = new Constellations(world.sky, document.getElementById('constellation'), world.solids);
 new InteractionPrompt(player.interaction, { element: ui.interactionPrompt, crosshair: ui.crosshair });
 
 // Development only (left out of production builds): a test stone and flower to try the
@@ -250,6 +253,7 @@ function animate() {
     player.storm = stormIntensity;
     world.update(delta, elapsed, camera, distanceWalked);
     interactionDebug?.update(delta);
+    constellations.update(delta, camera, player.isLocked && !player.interaction.target);
 
     // The music grows with the walk and turns toward morning at first light
     music.update(delta, { progress: world.sky.dawnProgress, sunAltitude: world.sky.sunAltitude, storm: stormIntensity });
@@ -274,7 +278,7 @@ renderer.renderer.setAnimationLoop(animate);
 if (import.meta.env.DEV) {
     window.mirage = {
         scene, camera, player, orb, world, story, storyState, renderer: renderer.renderer,
-        music, audio, traces, debug, storm,
+        music, audio, traces, debug, storm, constellations,
         interaction: player.interaction,
         environment,
         get testInteractables() { return testInteractables; }
