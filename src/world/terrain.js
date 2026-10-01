@@ -57,6 +57,12 @@ export class Terrain {
         this.sandColors = { trough: SAND_TROUGH, crest: SAND_CREST, damp: SAND_DAMP };
         // The sand's temperature: a cool blue tint at night, gold at sunrise (set by World)
         this.sandTint = { value: new THREE.Color(1, 1, 1) };
+        // The light's glow pooling on the sand around it (set from main.js): position, and colour
+        // times strength (black: none)
+        this.orbGlow = {
+            position: { value: new THREE.Vector3() },
+            color: { value: new THREE.Color(0, 0, 0) }
+        };
         this.ripples = createRippleNormalMap();
         this.ripples.repeat.set(this.size / 4, this.size / 4); // One tile of ripples every 4 units
 
@@ -172,6 +178,8 @@ export class Terrain {
             shader.uniforms.glitterColor = this.glitter.color;
             shader.uniforms.glitterStrength = this.glitter.strength;
             shader.uniforms.sandTint = this.sandTint;
+            shader.uniforms.orbGlowPosition = this.orbGlow.position;
+            shader.uniforms.orbGlowColor = this.orbGlow.color;
 
             shader.vertexShader = shader.vertexShader
                 .replace('#include <common>', '#include <common>\nvarying vec3 vGlitterPosition;')
@@ -184,10 +192,22 @@ export class Terrain {
                     uniform vec3 glitterColor;
                     uniform float glitterStrength;
                     uniform vec3 sandTint;
+                    uniform vec3 orbGlowPosition;
+                    uniform vec3 orbGlowColor;
                     varying vec3 vGlitterPosition;
                     float glitterHash(vec3 p, vec3 k) { return fract(sin(dot(p, k)) * 43758.5453); }`)
                 .replace('#include <opaque_fragment>', `{
                     outgoingLight *= sandTint;
+
+                    // The light's warm glow, pooling softly on the sand around it: wider and gentler
+                    // than a lamp's, as if the sand itself were glowing back
+                    if (orbGlowColor.r > 0.0) {
+                        vec3 toOrb = orbGlowPosition - vGlitterPosition;
+                        float orbDistance = length(toOrb);
+                        vec3 worldNormal = inverseTransformDirection(normal, viewMatrix);
+                        float facing = 0.25 + 0.75 * max(dot(worldNormal, toOrb / orbDistance), 0.0);
+                        outgoingLight += diffuseColor.rgb * orbGlowColor * facing / (1.0 + orbDistance * orbDistance / 30.0);
+                    }
                     vec3 grainSpace = vGlitterPosition * 45.0; // ~2 cm grains
                     vec3 cell = floor(grainSpace);
                     vec2 inCell = fract(grainSpace.xz) - 0.5;

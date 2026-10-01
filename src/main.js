@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { World } from './world/world.js';
 import { PlayerController } from './player/playerController.js';
+import { BodyShadow } from './player/bodyShadow.js';
 import { Orb } from './orb.js';
 import { AmbientAudio } from './audio.js';
 import { JourneyMusic } from './music.js';
@@ -77,6 +78,11 @@ const player = new PlayerController(camera, document.body, {
 });
 player.placeOnGround();
 player.movement.windDirection = world.wind.direction; // The storm pushes the way the wind blows
+// Your shadow on the sand, with no body to see
+const bodyShadow = new BodyShadow();
+scene.add(bodyShadow.object);
+const ORB_GLOW = new THREE.Color(1.0, 0.72, 0.38);
+const ORB_BOUNCE = new THREE.Color(0.85, 0.55, 0.28); // Its light, coming back up off the sand
 let distanceWalked = 0;
 let slideDistance = 0;
 const lastPosition = camera.position.clone();
@@ -237,14 +243,18 @@ function animate() {
     storyState.distanceToOrb = Math.hypot(camera.position.x - orb.position.x, camera.position.z - orb.position.z);
     storyState.distanceFromStart = Math.hypot(camera.position.x - PLAYER_START.x, camera.position.z - PLAYER_START.z);
     storyState.distanceToSeat = Math.hypot(camera.position.x - traces.seat.x, camera.position.z - traces.seat.z);
+    let orbProximity = 0;
     if (orb.visible) {
         // As the light fades away, the music comes back from its hush
-        const proximity = Math.max(0, 1 - (storyState.distanceToOrb / PROXIMITY_RANGE)) * orb.fade;
-        orb.setProximity(proximity, elapsed);
-        audio.setProximity(proximity);
+        orbProximity = Math.max(0, 1 - (storyState.distanceToOrb / PROXIMITY_RANGE)) * orb.fade;
+        orb.setProximity(orbProximity, elapsed);
+        audio.setProximity(orbProximity);
     }
     orb.update(delta, elapsed, audio.getFrequencyData());
     orbLight.intensity = orb.visible ? ORB_LIGHT_INTENSITY * orb.fade : 0;
+    // Its glow pools on the sand around it, warmer and wider as you come close
+    world.terrain.orbGlow.position.value.copy(orb.position);
+    world.terrain.orbGlow.color.value.copy(ORB_GLOW).multiplyScalar(orb.visible ? orb.fade * (0.5 + 0.9 * orbProximity) : 0);
 
     story.update(delta);
     storyText.update(delta);
@@ -274,8 +284,16 @@ function animate() {
         }
     }
     world.updateEnvironment(renderer.renderer);
-    // By mid-morning the sand is warm enough to make the far air waver
-    renderer.setShimmer(THREE.MathUtils.smoothstep(world.sky.sunAltitude, 7, 13) * (1 - stormIntensity), elapsed);
+    // Near the light, its glow comes back up off the sand and warms everything from below
+    world.lights.hemisphere.groundColor.lerp(ORB_BOUNCE, 0.55 * orbProximity);
+    bodyShadow.update(delta, player.eye, world.heightAt(player.eye.x, player.eye.z), player.view.yaw, player.movement.speed, player.seated);
+    // After sunrise the sand warms: the far air wavers, then the horizon starts to look like water
+    const clearAir = 1 - stormIntensity;
+    renderer.setHeat(
+        THREE.MathUtils.smoothstep(world.sky.sunAltitude, 5, 12) * clearAir,
+        THREE.MathUtils.smoothstep(world.sky.sunAltitude, 3, 9) * clearAir,
+        elapsed
+    );
 
     renderer.render();
 }
@@ -286,7 +304,7 @@ renderer.renderer.setAnimationLoop(animate);
 if (import.meta.env.DEV) {
     window.mirage = {
         scene, camera, player, orb, world, story, storyState, renderer: renderer.renderer,
-        music, audio, traces, debug, storm, constellations,
+        music, audio, traces, debug, storm, constellations, rendering: renderer,
         interaction: player.interaction,
         environment,
         get testInteractables() { return testInteractables; }

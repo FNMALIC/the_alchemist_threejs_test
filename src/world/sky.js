@@ -14,6 +14,9 @@ import { createMilkyWay } from './milkyWay.js';
 import { Meteors } from './meteors.js';
 
 const SKY_RADIUS = 800;
+const MOON_SILVER = new THREE.Color(0xc4d2ff);
+const MOONLIT_ZENITH = new THREE.Color(0x0a1634); // A night sky under a bright moon is deep blue, not black
+const MOONLIT_HORIZON = new THREE.Color(0x1d2c52);
 const STAR_RADIUS = 700;
 const UPDATE_EVERY_MS = 15 * 1000; // Recompute positions every 15 seconds of sky time
 
@@ -169,6 +172,10 @@ export class Sky {
         this.faintestMagnitude = 6; // Faintest star visible now (twilight and storm included)
         this.moonAltitude = -90;
         this.moonFraction = 0;
+        // How bright the moon is next to a full moon (0..~1.1). Not its lit fraction: a full moon
+        // shines straight back at us and is about ten times brighter than a half moon.
+        this.moonBrightness = 0;
+        this.moonColor = new THREE.Color();
         this.lastUpdate = -Infinity;
         this.colors = {
             zenith: new THREE.Color(),
@@ -419,7 +426,9 @@ export class Sky {
 
         const moon = horizontalPosition(Body.Moon, date);
         this.moonAltitude = moon.altitude;
-        this.moonFraction = brightness(Body.Moon, date).phase_fraction;
+        const moonLight = brightness(Body.Moon, date);
+        this.moonFraction = moonLight.phase_fraction;
+        this.moonBrightness = Math.min(1.2, Math.pow(10, -0.4 * (moonLight.mag + 12.7)));
         this.frame.direction(moon.azimuth, moon.altitude, this.moonDirection);
 
         // Stars: rotate the whole field at once
@@ -457,6 +466,11 @@ export class Sky {
         paletteColor(sunAltitude, 'zenith', this.colors.zenith);
         paletteColor(sunAltitude, 'horizon', this.colors.horizon);
         paletteColor(sunAltitude, 'glow', this.colors.glow);
+        // Under a bright moon the night sky is deep blue (until twilight takes over)
+        const moonSky = Math.min(1, this.moonBrightness) * THREE.MathUtils.smoothstep(this.moonAltitude, -2, 15) *
+            (1 - THREE.MathUtils.smoothstep(sunAltitude, -12, -5)) * 0.8;
+        this.colors.zenith.lerp(MOONLIT_ZENITH, moonSky);
+        this.colors.horizon.lerp(MOONLIT_HORIZON, moonSky);
 
         const faintest = limitingMagnitude(sunAltitude);
         [this.starField, this.planets].forEach(points => {
@@ -466,7 +480,7 @@ export class Sky {
 
         // How dark the sky is: no twilight, no moonlight, no blowing sand. Only then do the faint
         // lights show: the Milky Way first to go as dawn comes, the zodiacal light soon after.
-        const moonlight = this.moonFraction * THREE.MathUtils.smoothstep(this.moonAltitude, -4, 15);
+        const moonlight = Math.min(1, this.moonBrightness * 1.5) * THREE.MathUtils.smoothstep(this.moonAltitude, -4, 15);
         const clear = (1 - 0.85 * moonlight) * (1 - this.storm);
         this.milkyWay.material.uniforms.strength.value = (1 - THREE.MathUtils.smoothstep(sunAltitude, -19, -13)) * clear;
         this.domeMaterial.uniforms.zodiacal.value = 0.03 * (1 - THREE.MathUtils.smoothstep(sunAltitude, -17, -11)) * clear;
@@ -486,18 +500,22 @@ export class Sky {
         // Moon and sun visibility
         this.moon.visible = this.moonAltitude > -3 && this.storm < 0.5;
         this.domeMaterial.uniforms.stormAmount.value = this.storm * 0.95;
-        this.moonHalo.material.opacity = this.moonFraction * (1 - THREE.MathUtils.smoothstep(sunAltitude, -10, 0));
+        this.moonHalo.material.opacity = Math.min(1, Math.sqrt(this.moonBrightness)) * (1 - THREE.MathUtils.smoothstep(sunAltitude, -10, 0));
         this.sun.visible = sunAltitude > -3;
 
         // Light on the ground: moonlight at night, warming to sunlight at dawn
         const dawn = THREE.MathUtils.smoothstep(sunAltitude, -12, 3);
         const { hemisphere, moon, sun } = this.lights;
+        const moonUp = THREE.MathUtils.smoothstep(this.moonAltitude, -2, 10);
+        const moonNight = this.moonBrightness * moonUp * (1 - dawn); // How much the moon lights the night
         hemisphere.color.copy(this.nightSky).lerp(this.dawnSky, dawn);
         hemisphere.groundColor.copy(this.nightGround).lerp(this.dawnGround, dawn);
-        hemisphere.intensity = (0.5 + dawn * 0.6) * (1 - 0.35 * this.storm);
+        // A moonless night is lit by starlight alone; a full moon lifts the whole sky
+        hemisphere.intensity = (1.0 + 0.25 * Math.min(1, moonNight) + dawn * 0.1) * (1 - 0.35 * this.storm);
 
-        moon.intensity = 1.1 * this.moonFraction *
-            THREE.MathUtils.smoothstep(this.moonAltitude, -2, 10) * (1 - dawn);
+        // Moonlight: silver when the moon is high, warmer through the thick air near the horizon
+        moon.intensity = 1.3 * moonNight;
+        moon.color.copy(this.moonColor.setHex(0xffd6a0).lerp(MOON_SILVER, THREE.MathUtils.smoothstep(this.moonAltitude, 3, 28)));
         sun.intensity = 4 * THREE.MathUtils.smoothstep(sunAltitude, -4, 4);
         moon.intensity *= 1 - 0.8 * this.storm;
         sun.intensity *= 1 - 0.8 * this.storm;

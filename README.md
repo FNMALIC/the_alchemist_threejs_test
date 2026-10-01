@@ -45,7 +45,7 @@ scripts/
   build-constellations.mjs  Generates src/data/constellations.json from d3-celestial
 src/
   main.js             Scene setup and main loop
-  render.js           Renderer, tone mapping, shadows, bloom, quality settings
+  render.js           Renderer, tone mapping, shadows, bloom, quality settings; the morning's heat haze and mirage
   stages.js           The journey: night, crossing, mirage, morning, rest
   story.js            Story state machine and story text overlay
   moments.js          Discoveries along the way (lines and letters), shown once when you come near
@@ -61,6 +61,7 @@ src/
     headBob.js           The head's motion: gait, breathing when still, a nod on landing
     gait.js              Natural head motion while walking (step rhythm, sway, roll)
     spring.js            Critically damped spring used by the head
+    bodyShadow.js        Your shadow on the sand, from a body only the lights can see
   interactions/
     interaction.js       Noticing things: focus state machine, E to interact, events, context
     gaze.js              What the crosshair rests on: centre ray plus a little tolerance, registered things only

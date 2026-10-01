@@ -186,6 +186,12 @@ The journey matters more than the destination. Very few words; the world tells t
 - [x] The sand cools and warms: blue-tinted at night, gold at sunrise, plain and warm by mid-morning
 - [x] The morning goes on after the light: walking home, the sun climbs (up to an hour past sunrise), and by mid-morning the warm air makes the far horizon shimmer
 
+## Light and atmosphere ✅
+- [x] Heat haze that knows what is far: only distant ground wavers (read from the depth buffer); just under the far skyline a thin strip of sky appears on the hot sand, the inferior mirage that looks like water
+- [x] Your shadow: a body only the lights see (legs, arms, head; it swings as you walk and folds when you sit) casts a long shadow at sunrise, ahead of you on the way home, and a moon shadow at night
+- [x] Moonlight by the moon's real brightness (its magnitude: a half moon gives about a tenth of a full moon's light), silver when high, warmer near the horizon; a bright moon turns the night sky deep blue; a moonless night is starlit, dim but readable
+- [x] The light's warm glow pools wide on the sand around it, stronger as you come close, and bounces back up from the sand, warming everything from below
+
 ## Next ideas
 
 - [ ] Daylight details on the way back: things you passed in the dark look different in the morning
