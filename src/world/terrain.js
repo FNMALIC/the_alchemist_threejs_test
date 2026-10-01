@@ -1,12 +1,26 @@
 // terrain.js - Desert dunes, flattened around the oasis and the orb, lower along the way between them
+//
+// The dunes are a formula (heightAt), defined everywhere, so the desert has no end. The mesh that
+// shows them is a 600 m square that follows the player: when they wander far enough from its
+// centre, its heights are worked out again around them, a few rows each frame, and the mesh
+// jumps there in one go. It always jumps by RECENTER_STEP, a whole number of grid cells and of
+// ripple tiles, so the ground looks exactly the same before and after.
 import * as THREE from 'three';
 import { ImprovedNoise } from 'three/examples/jsm/math/ImprovedNoise.js';
 
 const noise = new ImprovedNoise(); // Fixed permutation: the same desert every time
 
+const RECENTER_STEP = 60; // Metres: 28 grid cells (600 m / 280) and 15 ripple tiles (4 m)
+const RECENTER_DISTANCE = 45; // How far from the mesh's centre the player may go before it follows
+const ROWS_PER_FRAME = 20; // Rows of heights worked out each frame while following
+
 const SAND_TROUGH = new THREE.Color(0xc29d6c);
 const SAND_CREST = new THREE.Color(0xe8d0a6);
 const SAND_DAMP = new THREE.Color(0x6f5c45);
+
+function snap(value) {
+    return Math.round(value / RECENTER_STEP) * RECENTER_STEP;
+}
 
 function smoothstep(edge0, edge1, x) {
     const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
@@ -27,9 +41,12 @@ export class Terrain {
         this.oasis = oasis;
         this.orb = orb;
         this.size = size;
-        this.center = { x: (oasis.x + orb.x) / 2, z: (oasis.z + orb.z) / 2 };
         this.segments = segments;
         this.cell = size / segments;
+        // Centre of the mesh, always on the RECENTER_STEP grid
+        this.center = { x: snap((oasis.x + orb.x) / 2), z: snap((oasis.z + orb.z) / 2) };
+        this.pending = null; // A move of the mesh being worked out, a few rows at a time
+        this.onRecenter = []; // Called after the mesh has moved (e.g. the sand patch re-reads it)
 
         // Shared by every sand surface (the whole desert and the detailed patch around the player)
         this.glitter = {
@@ -94,18 +111,12 @@ export class Terrain {
     createMesh(segments) {
         const geometry = new THREE.PlaneGeometry(this.size, this.size, segments, segments);
         geometry.rotateX(-Math.PI / 2);
-        geometry.translate(this.center.x, 0, this.center.z);
-
-        // Vertex order is ix + (segments + 1) * iz, with world z growing with iz
-        const positions = geometry.attributes.position;
-        this.gridHeights = new Float32Array(positions.count);
-        for (let i = 0; i < positions.count; i++) {
-            const height = this.heightAt(positions.getX(i), positions.getZ(i));
-            positions.setY(i, height);
-            this.gridHeights[i] = height;
-        }
-        geometry.computeVertexNormals();
-        geometry.setAttribute('color', this.createSandColors(geometry));
+        // Vertex order is ix + (segments + 1) * iz, with z growing with iz; positions are relative
+        // to the mesh, which sits at this.center. Heights, normals and colours are filled in below.
+        geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(geometry.attributes.position.count * 3), 3));
+        // The dunes stay within this, wherever the mesh is (it is never worked out again)
+        geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(), this.size * Math.SQRT1_2 + 30);
+        this.gridHeights = new Float32Array(geometry.attributes.position.count);
 
         // Leave a hole where the detailed sand patch is
         const hole = this.hole;
@@ -122,6 +133,9 @@ export class Terrain {
         const material = this.createSandMaterial('desert', cutHole);
 
         const mesh = new THREE.Mesh(geometry, material);
+        this.mesh = mesh;
+        this.pending = this.startMove(this.center.x, this.center.z);
+        while (!this.continueMove(Infinity)); // All at once at the start
         mesh.receiveShadow = true;
         mesh.castShadow = true; // Dunes throw long shadows when the sun is low
 
@@ -195,35 +209,79 @@ export class Terrain {
         return target.lerp(SAND_DAMP, 1 - smoothstep(5, 8, fromPool));
     }
 
-    createSandColors(geometry) {
-        const positions = geometry.attributes.position;
-        const normals = geometry.attributes.normal;
-        const colors = new Float32Array(positions.count * 3);
-        const color = new THREE.Color();
-        for (let i = 0; i < positions.count; i++) {
-            this.sandColor(positions.getX(i), positions.getZ(i), positions.getY(i), normals.getY(i), color)
-                .toArray(colors, i * 3);
+    // Keep the mesh under the player at (x, z); call every frame
+    follow(x, z) {
+        if (!this.pending) {
+            if (Math.max(Math.abs(x - this.center.x), Math.abs(z - this.center.z)) < RECENTER_DISTANCE) return;
+            this.pending = this.startMove(snap(x), snap(z));
         }
-        return new THREE.BufferAttribute(colors, 3);
+        // Far ahead of the mesh (a very slow frame rate): catch up at once
+        const far = Math.max(Math.abs(x - this.center.x), Math.abs(z - this.center.z)) > this.size / 4;
+        this.continueMove(far ? Infinity : ROWS_PER_FRAME);
     }
 
-    // Texture coordinates of the ripple map at a world position (matches the desert mesh)
-    uvAt(x, z) {
-        return [
-            (x - (this.center.x - this.size / 2)) / this.size,
-            1 - (z - (this.center.z - this.size / 2)) / this.size
-        ];
-    }
-
-    // Where the player may walk: the terrain minus a margin, so the edge stays hidden in the fog
-    bounds(margin = 60) {
-        const half = this.size / 2 - margin;
+    startMove(centerX, centerZ) {
+        const row = this.segments + 3; // One extra grid point on each side, for the normals
         return {
-            minX: this.center.x - half,
-            maxX: this.center.x + half,
-            minZ: this.center.z - half,
-            maxZ: this.center.z + half
+            x: centerX,
+            z: centerZ,
+            heights: new Float32Array(row * row), // Padded grid, worked out row by row
+            normals: new Float32Array(this.gridHeights.length * 3),
+            colors: new Float32Array(this.gridHeights.length * 3),
+            row: 0
         };
+    }
+
+    // Work out up to `rows` more rows of the pending move; returns true once the mesh has moved
+    continueMove(rows) {
+        const move = this.pending;
+        const { segments, cell } = this;
+        const padded = segments + 3;
+        const vertices = segments + 1;
+        const left = move.x - this.size / 2 - cell; // World position of padded grid point (0, 0)
+        const top = move.z - this.size / 2 - cell;
+        const color = new THREE.Color();
+
+        for (let done = 0; done < rows && move.row < padded; done++, move.row++) {
+            const p = move.row;
+            for (let i = 0; i < padded; i++) move.heights[i + padded * p] = this.heightAt(left + i * cell, top + p * cell);
+
+            // With three rows ready, the middle one's normals and colours can be worked out
+            const iz = p - 2;
+            if (iz < 0) continue;
+            for (let ix = 0; ix < vertices; ix++) {
+                const at = (dx, dz) => move.heights[ix + 1 + dx + padded * (iz + 1 + dz)];
+                const nx = -(at(1, 0) - at(-1, 0)) / (2 * cell);
+                const nz = -(at(0, 1) - at(0, -1)) / (2 * cell);
+                const length = Math.hypot(nx, 1, nz);
+                const index = ix + vertices * iz;
+                move.normals[index * 3] = nx / length;
+                move.normals[index * 3 + 1] = 1 / length;
+                move.normals[index * 3 + 2] = nz / length;
+                this.sandColor(left + (ix + 1) * cell, top + (iz + 1) * cell, at(0, 0), 1 / length, color)
+                    .toArray(move.colors, index * 3);
+            }
+        }
+        if (move.row < padded) return false;
+
+        // Everything is ready: move the mesh in one go
+        const geometry = this.mesh.geometry;
+        const positions = geometry.attributes.position;
+        for (let iz = 0; iz < vertices; iz++) {
+            for (let ix = 0; ix < vertices; ix++) {
+                const height = move.heights[ix + 1 + padded * (iz + 1)];
+                positions.setY(ix + vertices * iz, height);
+                this.gridHeights[ix + vertices * iz] = height;
+            }
+        }
+        geometry.attributes.normal.array.set(move.normals);
+        geometry.attributes.color.array.set(move.colors);
+        positions.needsUpdate = geometry.attributes.normal.needsUpdate = geometry.attributes.color.needsUpdate = true;
+        this.center = { x: move.x, z: move.z };
+        this.mesh.position.set(move.x, 0, move.z);
+        this.pending = null;
+        this.onRecenter.forEach(callback => callback());
+        return true;
     }
 }
 

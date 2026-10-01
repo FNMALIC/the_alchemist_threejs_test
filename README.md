@@ -89,10 +89,11 @@ src/
   data/stars.json     5,070 naked-eye stars (generated, see below)
   world/
     world.js          Puts the world together: oasis, desert, lights, fog
-    terrain.js        Dune height function and ground mesh
+    terrain.js        Dune height function and ground mesh; the mesh follows you, so the desert never ends
+    desertChunks.js   The desert beyond the known one: stones, shrubs and outcrops made (and taken away) as you walk
     sky.js            The real sky: stars, moon phase, planets, twilight colours, sun and moonlight
     astronomy.js      Sky positions over Al-Fayoum, dawn times, and the walking-driven sky clock
-    props.js          Old tree, palms, shrubs, rocks, grass, flowers
+    props.js          Old tree, palms, shrubs, rocks, grass, flowers (seeded, for the endless desert)
     traces.js         The other traveller: their trail, campfire, well, jar, letters, stones; your past walk
     dust.js           Sand drifting on the wind
     sandPatch.js      Detailed sand around the player: footprints and slide grooves pressed in as real dents, slowly filled by the wind

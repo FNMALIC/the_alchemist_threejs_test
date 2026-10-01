@@ -154,6 +154,13 @@ The journey matters more than the destination. Very few words; the world tells t
 - [x] A sandstorm partway across: stars gone, sand-coloured haze, the wind roars over the music and pushes you; then it passes
 - [x] The desert remembers (in this browser): your last walk appears faintly in the sand ("Footprints. Yours."), and a pebble is added by the stones each time you sit
 
+## A desert without end ✅
+*Goal: no invisible wall. You can walk the wrong way for as long as you like.*
+
+- [x] The dunes are a formula, so the ground mesh follows the player: it is worked out again around them a few rows per frame, then jumps 60 m (a whole number of grid cells and ripple tiles, so the jump can't be seen)
+- [x] Beyond the known desert, 60 m squares grow their own stones, dry shrubs and now and then an outcrop, from their own seed, so a place looks the same when you come back; squares far behind are taken away
+- [x] Streamed shrubs still answer the player (the environment registers and unregisters them)
+
 ## Next ideas
 
 - [ ] Daylight details on the way back: things you passed in the dark look different in the morning

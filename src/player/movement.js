@@ -32,11 +32,12 @@ const SITTING_EYE_HEIGHT = 0.95;
 
 export class Movement {
     // position: the eye position (without the head's motion), moved in place
-    // groundHeightAt(x, z): terrain height; bounds: { minX, maxX, minZ, maxZ } the player stays within
+    // groundHeightAt(x, z): terrain height; bounds: optional { minX, maxX, minZ, maxZ } the player
+    // stays within (the desert has none: it goes on forever)
     // colliders: [{ x, z, radius }] solid things; isUnderWater(x, z): whether a spot is in the pool
     // isFirmGround(x, z): damp, packed sand that doesn't give way (e.g. around the pool)
     constructor(position, {
-        groundHeightAt, bounds, colliders = [], isUnderWater = () => false, isFirmGround = () => false
+        groundHeightAt, bounds = null, colliders = [], isUnderWater = () => false, isFirmGround = () => false
     }) {
         this.position = position;
         this.groundHeightAt = groundHeightAt;
@@ -265,6 +266,7 @@ export class Movement {
     }
 
     keepInBounds(position) {
+        if (!this.bounds) return;
         position.x = THREE.MathUtils.clamp(position.x, this.bounds.minX, this.bounds.maxX);
         position.z = THREE.MathUtils.clamp(position.z, this.bounds.minZ, this.bounds.maxZ);
     }

@@ -6,6 +6,7 @@ import { Dust } from './dust.js';
 import { Footprints } from './footprints.js';
 import { SandSpray } from './sandSpray.js';
 import { SandPatch } from './sandPatch.js';
+import { DesertChunks, CHUNK_SIZE, KNOWN_CHUNKS } from './desertChunks.js';
 import {
     createOldTree, createPalm, createShrub, createRock, createGrassPatch, createFlower, swayGrass
 } from './props.js';
@@ -58,6 +59,8 @@ export class World {
 
         this.createOasis();
         this.createDesert();
+        // Beyond it, the desert goes on, made as you walk
+        this.chunks = new DesertChunks(this, { ...this.terrain.center });
 
         this.dust = new Dust();
         scene.add(this.dust.points);
@@ -80,6 +83,15 @@ export class World {
             this.solids.push(object);
         }
         return object;
+    }
+
+    // Take something out of the world again (and out of the way of the player and the gaze)
+    remove(object) {
+        this.scene.remove(object);
+        const collider = this.colliders.indexOf(object.userData.collider);
+        if (collider !== -1) this.colliders.splice(collider, 1);
+        const solid = this.solids.indexOf(object);
+        if (solid !== -1) this.solids.splice(solid, 1);
     }
 
     isUnderWater(x, z) {
@@ -144,10 +156,13 @@ export class World {
         }
     }
 
-    // The open desert: scattered stones, dry shrubs and a few rock outcrops as landmarks
+    // The known desert around the oasis and the light: scattered stones, dry shrubs and a few
+    // rock outcrops as landmarks along the way (beyond it, see desertChunks.js)
     createDesert() {
         const heightAt = this.heightAt;
-        const bounds = this.terrain.bounds(20);
+        const half = (KNOWN_CHUNKS + 0.5) * CHUNK_SIZE;
+        const { x: centerX, z: centerZ } = this.terrain.center;
+        const bounds = { minX: centerX - half, maxX: centerX + half, minZ: centerZ - half, maxZ: centerZ + half };
 
         const randomDesertPoint = () => {
             for (;;) {
@@ -190,6 +205,9 @@ export class World {
         this.sky.storm = storm;
 
         this.sky.update(delta, elapsed, camera, distanceWalked);
+        // The desert follows the player: the ground under them, and what lies on it
+        this.terrain.follow(camera.position.x, camera.position.z);
+        this.chunks.update(camera.position.x, camera.position.z);
         this.scene.fog.color.copy(this.sky.horizonColor).lerp(this.sky.stormColor, storm); // Fog keeps its own copy
         this.scene.fog.density = THREE.MathUtils.lerp(
             THREE.MathUtils.lerp(FOG_DENSITY_START, FOG_DENSITY_END, this.sky.dawnProgress), STORM_FOG_DENSITY, storm

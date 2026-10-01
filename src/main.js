@@ -15,7 +15,8 @@ import { loadMemory, saveMemory, PathRecorder } from './memory.js';
 import { Renderer, getQuality } from './render.js';
 import { InteractionPrompt } from './interactions/interactionPrompt.js';
 import { Environment } from './environment/environment.js';
-import { registerVegetation } from './environment/vegetation.js';
+import { registerVegetation, plantReaction } from './environment/vegetation.js';
+import { createReactive } from './environment/reactive.js';
 import { EnvironmentSounds } from './environment/environmentSounds.js';
 
 // The oasis where you wake, and the light far out across the dunes
@@ -64,7 +65,6 @@ scene.add(orbLight);
 
 const player = new PlayerController(camera, document.body, {
     groundHeightAt: world.heightAt,
-    bounds: world.terrain.bounds(),
     colliders: world.colliders,
     isUnderWater: (x, z) => world.isUnderWater(x, z),
     isFirmGround: (x, z) => world.isFirmGround(x, z)
@@ -109,6 +109,15 @@ const storm = new Storm();
 // The world noticing the player: sand under the feet, shrubs and flowers that move as you pass
 const environment = new Environment({ player, world, scene, low: quality.low });
 registerVegetation(environment, world.vegetation);
+// ...and the shrubs of the endless desert, as it is made and taken away around you
+const wildPlants = new Map();
+world.chunks.onAddPlant = ({ object, kind }) => wildPlants.set(object, environment.registerReactive(
+    createReactive({ id: `wild-${kind}-${object.id}`, object, ...plantReaction(object, kind) })
+));
+world.chunks.onRemovePlant = ({ object }) => {
+    environment.unregisterReactive(wildPlants.get(object));
+    wildPlants.delete(object);
+};
 new EnvironmentSounds(audio, environment, camera);
 
 // UI

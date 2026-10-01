@@ -76,6 +76,11 @@ export class SandPatch {
         this.deformTexture.needsUpdate = true;
 
         const terrainOrigin = new THREE.Vector2(terrain.center.x - terrain.size / 2, terrain.center.z - terrain.size / 2);
+        // The desert mesh follows the player (see terrain.js): read it again where it now is
+        terrain.onRecenter.push(() => {
+            terrainOrigin.set(terrain.center.x - terrain.size / 2, terrain.center.z - terrain.size / 2);
+            this.coarseTexture.needsUpdate = true;
+        });
         this.uniforms = {
             heightMap: { value: this.heightTexture },
             coarseMap: { value: this.coarseTexture },
