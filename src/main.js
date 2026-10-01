@@ -4,7 +4,6 @@ import { World } from './world/world.js';
 import { PlayerController } from './player/playerController.js';
 import { Orb } from './orb.js';
 import { AmbientAudio } from './audio.js';
-import { Footsteps } from './footsteps.js';
 import { JourneyMusic } from './music.js';
 import { StoryDirector, StoryText } from './story.js';
 import { createStages } from './stages.js';
@@ -17,7 +16,6 @@ import { InteractionPrompt } from './interactions/interactionPrompt.js';
 import { Environment } from './environment/environment.js';
 import { registerVegetation, plantReaction } from './environment/vegetation.js';
 import { createReactive } from './environment/reactive.js';
-import { EnvironmentSounds } from './environment/environmentSounds.js';
 
 // The oasis where you wake, and the light far out across the dunes
 const OASIS = { x: 0, z: 0, poolX: -7, poolZ: 1 };
@@ -33,7 +31,7 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 camera.position.copy(PLAYER_START);
 camera.lookAt(ORB_POSITION.x, 2, ORB_POSITION.z);
-scene.add(camera); // The first-person hands hang from it
+scene.add(camera);
 
 const quality = getQuality();
 const renderer = new Renderer(scene, camera, quality);
@@ -77,25 +75,18 @@ const player = new PlayerController(camera, document.body, {
     }
 });
 player.placeOnGround();
-renderer.addViewModel(player.hands.camera); // After the lights are made: they light the hands too
 let distanceWalked = 0;
 let slideDistance = 0;
 const lastPosition = camera.position.clone();
 const audio = new AmbientAudio(`${import.meta.env.BASE_URL}ambient.mp3`);
-const footsteps = new Footsteps(audio);
-// Footstep sounds are switched off for now (they don't sit well with the rest of the world yet);
-// add ?footsteps=on to the URL to hear them
-const FOOTSTEP_SOUNDS = new URLSearchParams(window.location.search).get('footsteps') === 'on';
 const music = new JourneyMusic(audio);
 
-// Every step and landing: a sound (if on), and a real dent pressed into the sand nearby. The
-// footprint marks further away and the grains kicked up come from the environment (sandResponse.js)
+// Every step and landing presses a real dent into the sand nearby. The footprint marks further
+// away and the grains kicked up come from the environment (sandResponse.js). Walking is silent.
 player.onStep = step => {
-    if (FOOTSTEP_SOUNDS) footsteps.step(step);
     if (step.surface === 'sand') world.sandPatch.stamp(step);
 };
 player.onLand = strength => {
-    if (FOOTSTEP_SOUNDS) footsteps.land(strength);
     const { x, z } = player.eye;
     const heading = Math.atan2(player.movement.heading.x, player.movement.heading.y);
     [-1, 1].forEach(foot => world.sandPatch.stamp({ x, z, heading, foot }, 1.2 + strength * 0.5));
@@ -118,7 +109,6 @@ world.chunks.onRemovePlant = ({ object }) => {
     environment.unregisterReactive(wildPlants.get(object));
     wildPlants.delete(object);
 };
-new EnvironmentSounds(audio, environment, camera);
 
 // UI
 const ui = {
@@ -264,10 +254,8 @@ function animate() {
     // The music grows with the walk and turns toward morning at first light
     music.update(delta, { progress: world.sky.dawnProgress, sunAltitude: world.sky.sunAltitude, storm: stormIntensity });
 
-    // Sliding down a dune: a hiss of sand (if on) and a groove cut by the feet (the spray around
-    // the feet comes from the environment)
+    // Sliding down a dune: the feet cut a groove (the spray around them comes from the environment)
     const slideSpeed = player.slide.length();
-    if (FOOTSTEP_SOUNDS) footsteps.slide(slideSpeed);
     if (slideSpeed > 0.8) {
         slideDistance += slideSpeed * delta;
         if (slideDistance > 0.12) {

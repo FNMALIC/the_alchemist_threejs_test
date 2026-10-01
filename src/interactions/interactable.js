@@ -24,7 +24,7 @@
 // onLeaveProximity, onStepNearby, onLandNearby and the rest are kept as given, and the
 // environment picks them up when the interactable is registered.
 //
-// context: { player, camera, scene, hands, interaction, target, distance, point, eye, position,
+// context: { player, camera, scene, interaction, target, distance, point, eye, position,
 //            direction, movementState } (see createContext in interaction.js)
 import { Bounds } from './bounds.js';
 

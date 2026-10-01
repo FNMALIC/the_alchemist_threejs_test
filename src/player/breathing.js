@@ -1,4 +1,4 @@
-// breathing.js - One slow, uneven breath that the head and the hands both follow.
+// breathing.js - One slow, uneven breath that the head follows.
 //
 // Breathing in is quicker than breathing out, with a short pause before the next breath. Each
 // breath is a little longer or shorter, deeper or shallower than the last, so it never loops.

@@ -29,7 +29,7 @@ export class AmbientAudio {
         this.masterGain.gain.value = this.userVolume * this.proximityVolume;
         this.masterGain.connect(context.destination);
 
-        // Sound effects (footsteps) skip the proximity fade, but follow the volume slider
+        // Sound effects (wind, birdsong) skip the proximity fade, but follow the volume slider
         this.effectsGain = context.createGain();
         this.effectsGain.gain.value = this.userVolume;
         this.effectsGain.connect(context.destination);

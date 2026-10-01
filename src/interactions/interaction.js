@@ -31,7 +31,7 @@ const INTERACT_KEY = 'KeyE';
 export const DEFAULT_INTERACTION_DISTANCE = 3; // Metres from the eye
 
 export class Interaction extends THREE.EventDispatcher {
-    // player: PlayerController (camera, pointer lock, state, hands, eye)
+    // player: PlayerController (camera, pointer lock, state, eye)
     // options: { scene, distance, occlusion }
     //   distance: how far the eye reaches, in metres
     //   occlusion: { blockers, groundHeightAt } what hides things from view (see occlusion.js)
@@ -198,7 +198,6 @@ export class Interaction extends THREE.EventDispatcher {
             player,
             camera,
             scene: this.scene,
-            hands: player.hands,
             interaction: this,
             target: interactable,
             distance: inFocus ? this.targetDistance : eye.distanceTo(interactable.bounds.center),

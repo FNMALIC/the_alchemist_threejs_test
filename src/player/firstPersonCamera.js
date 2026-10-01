@@ -22,7 +22,7 @@ export class FirstPersonCamera {
         this.yaw = start.y; // Body: turning left and right
         this.pitch = clampPitch(start.x); // Head: looking up and down
 
-        // How fast the view is turning (rad/s, x: yaw, y: pitch), smoothed; the hands lag behind it
+        // How fast the view is turning (rad/s, x: yaw, y: pitch), smoothed
         this.turnRate = new THREE.Vector2();
         this.turned = new THREE.Vector2(); // Turning since the last frame
 

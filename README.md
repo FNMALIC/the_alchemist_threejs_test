@@ -44,7 +44,7 @@ scripts/
   build-stars.mjs     Generates src/data/stars.json from the HYG star database
 src/
   main.js             Scene setup and main loop
-  render.js           Renderer, tone mapping, shadows, bloom, quality settings; the hands' own pass
+  render.js           Renderer, tone mapping, shadows, bloom, quality settings
   stages.js           The journey: night, crossing, mirage, morning, rest
   story.js            Story state machine and story text overlay
   moments.js          Discoveries along the way (lines and letters), shown once when you come near
@@ -56,12 +56,10 @@ src/
     firstPersonCamera.js Mouse look: the body turns (yaw), the head tilts (pitch, clamped)
     movement.js          Movement and sand physics: climbing, sliding, sinking, wading, jumping, collisions
     movementState.js     idle / walking / sprinting / sliding / jumping / falling / landing, with change events
-    breathing.js         One uneven breath, quicker after hurrying, shared by the head and hands
+    breathing.js         One uneven breath, quicker after hurrying, felt in the head
     headBob.js           The head's motion: gait, breathing when still, a nod on landing
     gait.js              Natural head motion while walking (step rhythm, sway, roll)
-    spring.js            Critically damped spring used by the head and hands
-    hands.js             First-person hands: rest pose and procedural motion
-    handModel.js         The low-poly hand and linen sleeve
+    spring.js            Critically damped spring used by the head
   interactions/
     interaction.js       Noticing things: focus state machine, E to interact, events, context
     gaze.js              What the crosshair rests on: centre ray plus a little tolerance, registered things only
@@ -81,11 +79,9 @@ src/
     sandResponse.js      The sand under the feet: footprints, grains and dust for steps, landings, slides
     particles.js         Pooled dust puffs, pollen and dry bits, one draw call
     spatialGrid.js       Reactive things sorted into cells, so only nearby ones are looked at
-    environmentSounds.js Rustle, stone and sand sounds made in the browser, played from the events
   orb.js              The light: glowing orb, sound-reactive waves and particles; fades away like a mirage
   audio.js            Background track, proximity volume fade and reverb
   music.js            Music that grows with the walk: wind, drone, plucked Hijaz melody, key change at first light
-  footsteps.js        Footstep (heel, roll, toe-off), splash, landing and sliding sounds, generated in the browser
   data/stars.json     5,070 naked-eye stars (generated, see below)
   world/
     world.js          Puts the world together: oasis, desert, lights, fog
@@ -105,21 +101,14 @@ In dev mode (`npm run dev`), `window.mirage` exposes the scene, camera, player, 
 story for debugging in the browser console, e.g. `mirage.story.goTo('mirage')`,
 `mirage.world.sky.clock.progress = 0.9`, or `mirage.debug.timeScale = 4` to fast-forward.
 
-Footstep sounds are off for now; add `?footsteps=on` to the URL to hear them.
-
 ### The player
 
 `PlayerController` owns the player's parts and updates them in order each frame: the body
-moves (`Movement`), its state is worked out once (`MovementState`), then the breath, head and
-hands follow from that state. Other systems read the player only through the controller:
+moves (`Movement`), its state is worked out once (`MovementState`), then the breath and head
+follow from that state. Other systems read the player only through the controller:
 `player.position`, `player.state.current`, `player.slide`, the `step` and `land` events
 (`player.addEventListener('step', ({ step }) => ...)`, also the `onStep` / `onLand` hooks), and
 `player.state.addEventListener('change', ...)` or `player.pointerLock.addEventListener('lock' | 'unlock', ...)`.
-
-The hands are children of the camera on their own layer (`VIEW_MODEL_LAYER`), drawn in a
-second pass after clearing depth, so they never sink into the world. The world's lights are
-enabled on that layer too; a light added later needs `light.layers.enable(VIEW_MODEL_LAYER)`
-to light the hands.
 
 In dev mode, `mirage.player.state.current` shows the movement state.
 
@@ -142,7 +131,7 @@ const stone = player.interaction.register({
 player.interaction.unregister(stone);
 ```
 
-`context` has `player`, `camera`, `scene`, `hands`, `interaction`, `target`, `distance`,
+`context` has `player`, `camera`, `scene`, `interaction`, `target`, `distance`,
 `point`, `eye`, `position`, `direction` and `movementState`. Other options: `maxDistance`,
 `repeatable` (holding E repeats), `cooldown` (seconds before E works on it again, default 0.25),
 `highlight` (default on), `enabled`, and `dynamic: true` for things that move (their bounds then
@@ -171,7 +160,7 @@ const bush = environment.registerReactive({
     object: bushMesh,
     reactionRadius: 1,             // metres: "near" for enter / leave
     response: new Sway(bushMesh),  // how it moves (or Tip, for something heavy)
-    sound: 'rustle',               // for the audio hooks
+    sound: 'rustle',               // for a sound hook (none plays for now)
     onProximity(context) {},       // optional: onLeaveProximity, onStepNearby, onLandNearby
 });
 environment.unregisterReactive(bush);

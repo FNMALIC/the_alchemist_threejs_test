@@ -15,7 +15,6 @@
 //   sound             what its movement sounds like, for the audio hooks: 'rustle', 'stone' or null
 //   loudness          0..1 how loud that is
 //   particles         what it sheds when moved: 'motes' (pollen), 'flakes' (dry bits) or null
-//   brushes           walking right through it brushes the hands
 //   cooldown          seconds before footsteps or landings can move it again
 //   dynamic           it moves around: its position is followed every frame
 //   enabled           false: ignored, as if it weren't there
@@ -26,7 +25,7 @@
 //   onLandNearby(context)      the player landed from a jump close by
 //
 // context: { player, environment, reactive, object, distance, direction (from the player toward
-//            it, along the ground), strength, position, movementState, hands, step }
+//            it, along the ground), strength, position, movementState, step }
 //
 // react(dx, dz, strength) gives it a push; reset() puts it back at rest at once.
 import { Bounds } from '../interactions/bounds.js';
@@ -54,7 +53,6 @@ export function createReactive({
     sound = null,
     loudness = 1,
     particles = null,
-    brushes = false,
     cooldown = 0.12,
     dynamic = false,
     enabled = true,
@@ -85,7 +83,6 @@ export function createReactive({
         sound,
         loudness,
         particles,
-        brushes,
         cooldown,
         dynamic,
         enabled,

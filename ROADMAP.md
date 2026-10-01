@@ -145,7 +145,7 @@ The journey matters more than the destination. Very few words; the world tells t
 - [x] The other traveller, told only through traces: their half-erased trail out to the light and back home, a cold campfire, a dry well, a water jar, a stack of stones under the old tree; each trace has one line, found only by wandering
 - [x] The light fades into the sunrise (no shatter, no explanation)
 - [x] Sit under the old tree (E): the music falls away, the screen whitens, a bird, "Walk again"
-- [x] Footstep sounds turned off for now (`?footsteps=on`)
+- [x] Footstep sounds turned off (later removed altogether)
 
 ## Something to feel ✅
 *Goal: the journey had beauty but no feeling. Give it a person, one hard moment, and memory.*
@@ -160,6 +160,10 @@ The journey matters more than the destination. Very few words; the world tells t
 - [x] The dunes are a formula, so the ground mesh follows the player: it is worked out again around them a few rows per frame, then jumps 60 m (a whole number of grid cells and ripple tiles, so the jump can't be seen)
 - [x] Beyond the known desert, 60 m squares grow their own stones, dry shrubs and now and then an outcrop, from their own seed, so a place looks the same when you come back; squares far behind are taken away
 - [x] Streamed shrubs still answer the player (the environment registers and unregisters them)
+
+## Quieter, emptier ✅
+- [x] The first-person hands are gone: nothing between you and the desert
+- [x] Walking is silent: no footsteps, landing or sliding sounds, and no rustles or stone sounds from the environment (the music, wind and birdsong stay)
 
 ## Next ideas
 

@@ -27,7 +27,6 @@ import { SandResponse } from './sandResponse.js';
 import { WALK_SPEED } from '../player/movement.js';
 
 const LEAVE_FACTOR = 1.15; // The player has to be this much further away to leave than to enter
-const BRUSH_DISTANCE = 0.55; // Metres: a step this close to something that brushes moves the hands
 const LAND_REACH = 1.3; // A landing is felt this much further than a footstep
 
 export class Environment extends THREE.EventDispatcher {
@@ -213,7 +212,6 @@ export class Environment extends THREE.EventDispatcher {
                 this.keepMoving(item);
                 this.effects(item, 'step', strength, direction);
             }
-            if (item.brushes && distance < BRUSH_DISTANCE) this.brushHands(item, strength);
 
             const context = this.createContext(item, distance, strength, step);
             item.onStepNearby?.(context);
@@ -281,14 +279,6 @@ export class Environment extends THREE.EventDispatcher {
         this.dispatchEvent({ type: 'sand', cause, strength, position: new THREE.Vector3(x, y, z) });
     }
 
-    // Walking right through something that brushes: the hand on that side gives a little
-    brushHands(item, strength) {
-        const { x, z } = this.player.position;
-        const yaw = this.player.view.yaw;
-        const right = (item.bounds.center.x - x) * Math.cos(yaw) - (item.bounds.center.z - z) * Math.sin(yaw);
-        this.player.hands.brush(right >= 0 ? 1 : -1, strength);
-    }
-
     keepMoving(item) {
         if (item.updating || !item.response?.active) return;
         item.updating = true;
@@ -348,7 +338,6 @@ export class Environment extends THREE.EventDispatcher {
             strength,
             position: player.position.clone(),
             movementState: player.state.current,
-            hands: player.hands,
             step
         };
     }

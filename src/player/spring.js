@@ -1,4 +1,4 @@
-// spring.js - Critically damped spring, shared by the head and hands so their motion has weight
+// spring.js - Critically damped spring, used by the head so their motion has weight
 // and lag instead of following a perfect sine wave.
 // (See Daniel Holden, "Spring-It-On: The Game Developer's Spring-Roll-Call")
 

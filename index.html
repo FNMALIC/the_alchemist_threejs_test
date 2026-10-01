@@ -7,9 +7,6 @@
   <link rel="icon" href="data:,">
   <style>
     body { margin: 0; overflow: hidden; background-color: black; }
-    /* How high the first-person hands reach up the screen while walking. Their lens has a fixed
-       vertical angle, so this share of the height holds at any window size. */
-    :root { --hands-top: 23vh; }
     canvas { display: block; }
 
     #audio-controls {
@@ -121,12 +118,11 @@
     }
     #instructions.hidden { display: none; }
 
-    /* Story lines: a quiet subtitle in the bottom-left corner that drifts in and fades away,
-       sitting just above the left hand rather than over it */
+    /* Story lines: a quiet subtitle in the bottom-left corner that drifts in and fades away */
     #story {
       position: absolute;
       left: 28px;
-      bottom: max(28px, var(--hands-top));
+      bottom: 28px;
       max-width: min(440px, calc(100vw - 56px));
       padding: 14px 20px 15px 18px;
       border-left: 2px solid rgba(255, 204, 102, 0.7);
@@ -171,7 +167,7 @@
 
     /* On narrow screens, sit above the volume control */
     @media (max-width: 640px) {
-      #story { left: 16px; right: 16px; bottom: max(84px, var(--hands-top)); max-width: none; font-size: 16px; }
+      #story { left: 16px; right: 16px; bottom: 84px; max-width: none; font-size: 16px; }
     }
 
     @media (prefers-reduced-motion: reduce) {

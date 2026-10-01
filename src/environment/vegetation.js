@@ -14,7 +14,6 @@ const PLANTS = {
         sound: 'rustle',
         loudness: 0.8,
         particles: 'flakes',
-        brushes: true
     },
     // Soft and light: leans away slowly, sways longer
     flower: {
@@ -24,7 +23,6 @@ const PLANTS = {
         sound: 'rustle',
         loudness: 0.25,
         particles: 'motes',
-        brushes: false,
         interactStrength: 0.9
     }
 };

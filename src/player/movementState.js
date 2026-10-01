@@ -1,5 +1,5 @@
 // movementState.js - What the body is doing right now, worked out once per frame from the movement.
-// The head, the hands (and later footsteps, interactions and the story) react to this one state
+// The head (and later interactions and the story) react to this one state
 // instead of each re-deriving it from the physics.
 //
 //   idle       standing (or pushing against something without getting anywhere)

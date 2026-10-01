@@ -1,14 +1,13 @@
 // playerController.js - The player: a body that walks the sand, a head that looks around and
-// moves with each step and breath, and two hands at the bottom of the view.
+// moves with each step and breath.
 //
 //   PlayerController       input, and the order things happen in each frame
 //    ├── PointerLock        captures the mouse (Esc releases it, a click locks it again)
 //    ├── FirstPersonCamera  the mouse turns the body (yaw) and tilts the head (pitch)
 //    ├── Movement           walking, hurrying, jumping and the sand physics
 //    ├── MovementState      idle / walking / sprinting / sliding / jumping / falling / landing
-//    ├── Breathing          one breath, shared by the head and the hands
+//    ├── Breathing          one slow breath, felt in the head
 //    ├── HeadBob            the head's motion: gait, breath, landing
-//    ├── Hands              the first-person hands
 //    └── Interaction        noticing things: gaze, focus, E to interact (src/interactions/)
 //
 // Everything else (footsteps, the story, interactable and reactive things) talks to the player
@@ -22,7 +21,6 @@ import { Movement, WALK_SPEED } from './movement.js';
 import { MovementState } from './movementState.js';
 import { Breathing } from './breathing.js';
 import { HeadBob } from './headBob.js';
-import { Hands } from './hands.js';
 import { Interaction } from '../interactions/interaction.js';
 
 const KEY_BINDINGS = {
@@ -41,8 +39,8 @@ const KEY_BINDINGS = {
 const HURRY_EFFORT = 0.7; // How hard hurrying works the lungs (0..1; see breathing.js)
 
 export class PlayerController extends EventDispatcher {
-    // camera: the scene's camera, placed and pointed where the player starts (it must be in the
-    // scene, as the hands hang from it); domElement: what the pointer locks to
+    // camera: the scene's camera, placed and pointed where the player starts
+    // domElement: what the pointer locks to
     // world: { groundHeightAt, bounds, colliders, isUnderWater, isFirmGround } (see movement.js)
     // options: { scene, interaction: { distance, occlusion } } (see interaction.js)
     constructor(camera, domElement, world, { scene = null, interaction = {} } = {}) {
@@ -54,14 +52,7 @@ export class PlayerController extends EventDispatcher {
         this.state = new MovementState();
         this.breathing = new Breathing();
         this.head = new HeadBob();
-        this.hands = new Hands(camera);
         this.interaction = new Interaction(this, { scene, ...interaction });
-
-        // The hands answer what the interaction notices; it knows nothing about them
-        this.interaction.addEventListener('targetchange', ({ interactable }) => {
-            this.hands.setReady(interactable !== null);
-        });
-        this.interaction.addEventListener('interact', () => this.hands.reach());
 
         // Hooks: onStep(step) when a foot lands, onLand(strength) after a jump (the 'step' and
         // 'land' events say the same, for any number of listeners)
@@ -75,7 +66,6 @@ export class PlayerController extends EventDispatcher {
         this.movement.onLand = strength => {
             this.state.land(strength);
             this.head.land(strength);
-            this.hands.land(strength);
             this.onLand?.(strength);
             this.dispatchEvent({ type: 'land', strength });
         };
@@ -177,10 +167,9 @@ export class PlayerController extends EventDispatcher {
         }
         this.view.update(delta, movement.position, head);
         this.interaction.update(delta); // From where the eyes are now
-        this.hands.update(delta, state, head.gait, this.breathing.value, this.view);
     }
 
-    // A foot landed: tell whoever listens (footsteps, the sand, nearby plants)
+    // A foot landed: tell whoever listens (the sand, nearby plants)
     step(walkSpeed) {
         const { movement } = this;
         const { position, heading } = movement;
