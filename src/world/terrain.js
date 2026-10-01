@@ -4,6 +4,10 @@ import { ImprovedNoise } from 'three/examples/jsm/math/ImprovedNoise.js';
 
 const noise = new ImprovedNoise(); // Fixed permutation: the same desert every time
 
+const SAND_TROUGH = new THREE.Color(0xc29d6c);
+const SAND_CREST = new THREE.Color(0xe8d0a6);
+const SAND_DAMP = new THREE.Color(0x6f5c45);
+
 function smoothstep(edge0, edge1, x) {
     const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
     return t * t * (3 - 2 * t);
@@ -26,6 +30,22 @@ export class Terrain {
         this.center = { x: (oasis.x + orb.x) / 2, z: (oasis.z + orb.z) / 2 };
         this.segments = segments;
         this.cell = size / segments;
+
+        // Shared by every sand surface (the whole desert and the detailed patch around the player)
+        this.glitter = {
+            direction: { value: new THREE.Vector3(0, 1, 0) },
+            color: { value: new THREE.Color(1, 1, 1) },
+            strength: { value: 0 }
+        };
+        this.sandColors = { trough: SAND_TROUGH, crest: SAND_CREST, damp: SAND_DAMP };
+        this.ripples = createRippleNormalMap();
+        this.ripples.repeat.set(this.size / 4, this.size / 4); // One tile of ripples every 4 units
+
+        // The square where the detailed sand patch is drawn instead (see sandPatch.js)
+        this.hole = {
+            center: { value: new THREE.Vector2(1e9, 1e9) },
+            half: { value: 0 }
+        };
 
         this.mesh = this.createMesh(segments);
     }
@@ -54,14 +74,17 @@ export class Terrain {
     surfaceHeightAt(x, z) {
         const u0 = (x - (this.center.x - this.size / 2)) / this.cell;
         const v0 = (z - (this.center.z - this.size / 2)) / this.cell;
-        const ix = Math.floor(u0), iz = Math.floor(v0);
+        const last = this.segments - 1;
+        const ix = Math.min(last, Math.max(0, Math.floor(u0)));
+        const iz = Math.min(last, Math.max(0, Math.floor(v0)));
         const u = u0 - ix, v = v0 - iz;
-        const x0 = this.center.x - this.size / 2 + ix * this.cell;
-        const z0 = this.center.z - this.size / 2 + iz * this.cell;
-        const a = this.heightAt(x0, z0);
-        const b = this.heightAt(x0, z0 + this.cell);
-        const c = this.heightAt(x0 + this.cell, z0 + this.cell);
-        const d = this.heightAt(x0 + this.cell, z0);
+        // Heights at the mesh's own grid points (stored when the mesh was built)
+        const row = this.segments + 1;
+        const heights = this.gridHeights;
+        const a = heights[ix + row * iz];
+        const b = heights[ix + row * (iz + 1)];
+        const c = heights[ix + 1 + row * (iz + 1)];
+        const d = heights[ix + 1 + row * iz];
         // Same split as PlaneGeometry: triangles (a, b, d) and (b, c, d)
         return u + v <= 1
             ? a + (d - a) * u + (b - a) * v
@@ -73,43 +96,62 @@ export class Terrain {
         geometry.rotateX(-Math.PI / 2);
         geometry.translate(this.center.x, 0, this.center.z);
 
+        // Vertex order is ix + (segments + 1) * iz, with world z growing with iz
         const positions = geometry.attributes.position;
+        this.gridHeights = new Float32Array(positions.count);
         for (let i = 0; i < positions.count; i++) {
-            positions.setY(i, this.heightAt(positions.getX(i), positions.getZ(i)));
+            const height = this.heightAt(positions.getX(i), positions.getZ(i));
+            positions.setY(i, height);
+            this.gridHeights[i] = height;
         }
         geometry.computeVertexNormals();
         geometry.setAttribute('color', this.createSandColors(geometry));
 
-        const ripples = createRippleNormalMap();
-        ripples.repeat.set(this.size / 4, this.size / 4); // One tile of ripples every 4 units
-
-        const material = new THREE.MeshStandardMaterial({
-            vertexColors: true,
-            roughness: 0.95,
-            metalness: 0,
-            normalMap: ripples,
-            normalScale: new THREE.Vector2(0.4, 0.4)
-        });
-
-        this.addGlitter(material);
+        // Leave a hole where the detailed sand patch is
+        const hole = this.hole;
+        const cutHole = shader => {
+            shader.uniforms.holeCenter = hole.center;
+            shader.uniforms.holeHalf = hole.half;
+            shader.fragmentShader = shader.fragmentShader
+                .replace('#include <common>', `#include <common>
+                    uniform vec2 holeCenter;
+                    uniform float holeHalf;`)
+                .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+                    if (all(lessThan(abs(vGlitterPosition.xz - holeCenter), vec2(holeHalf)))) discard;`);
+        };
+        const material = this.createSandMaterial('desert', cutHole);
 
         const mesh = new THREE.Mesh(geometry, material);
         mesh.receiveShadow = true;
         mesh.castShadow = true; // Dunes throw long shadows when the sun is low
+
         return mesh;
+    }
+
+    // A sand material: vertex colours, wind ripples and glitter.
+    // extend(shader) can change the shader further (after the glitter has been added);
+    // `name` keeps differently extended materials from sharing one compiled shader.
+    createSandMaterial(name, extend) {
+        const material = new THREE.MeshStandardMaterial({
+            vertexColors: true,
+            roughness: 0.95,
+            metalness: 0,
+            normalMap: this.ripples,
+            normalScale: new THREE.Vector2(0.4, 0.4)
+        });
+        material.onBeforeCompile = shader => {
+            this.addGlitter(shader);
+            extend?.(shader);
+        };
+        material.customProgramCacheKey = () => `sand-${name}`;
+        return material;
     }
 
     // Sand glitter (after Journey): each tiny cell of sand is a grain facet turned a random way;
     // the few that happen to mirror the moon or sun toward the eye flash briefly as you move.
     // World sets glitter.direction / color / strength from the brightest light every frame.
-    addGlitter(material) {
-        this.glitter = {
-            direction: { value: new THREE.Vector3(0, 1, 0) },
-            color: { value: new THREE.Color(1, 1, 1) },
-            strength: { value: 0 }
-        };
-
-        material.onBeforeCompile = shader => {
+    addGlitter(shader) {
+        {
             shader.uniforms.glitterDirection = this.glitter.direction;
             shader.uniforms.glitterColor = this.glitter.color;
             shader.uniforms.glitterStrength = this.glitter.strength;
@@ -142,34 +184,35 @@ export class Terrain {
                     outgoingLight += glitterColor * sparkle * nearby * glitterStrength * 3.0;
                 }
                 #include <opaque_fragment>`);
-        };
+        }
     }
 
     // Sand colour: pale on the crests, deeper in the hollows and on steep faces, damp near the pool
+    sandColor(x, z, height, normalY, target) {
+        target.copy(SAND_TROUGH).lerp(SAND_CREST, THREE.MathUtils.clamp(height / 7, 0, 1));
+        target.multiplyScalar(0.8 + 0.2 * normalY); // Steeper faces a little darker
+        const fromPool = Math.hypot(x - this.oasis.poolX, z - this.oasis.poolZ);
+        return target.lerp(SAND_DAMP, 1 - smoothstep(5, 8, fromPool));
+    }
+
     createSandColors(geometry) {
         const positions = geometry.attributes.position;
         const normals = geometry.attributes.normal;
         const colors = new Float32Array(positions.count * 3);
-        const trough = new THREE.Color(0xc29d6c);
-        const crest = new THREE.Color(0xe8d0a6);
-        const damp = new THREE.Color(0x6f5c45);
         const color = new THREE.Color();
-
         for (let i = 0; i < positions.count; i++) {
-            const x = positions.getX(i);
-            const z = positions.getZ(i);
-            const height = positions.getY(i);
-
-            color.copy(trough).lerp(crest, THREE.MathUtils.clamp(height / 7, 0, 1));
-            color.multiplyScalar(0.8 + 0.2 * normals.getY(i)); // Steeper faces a little darker
-
-            const fromPool = Math.hypot(x - this.oasis.poolX, z - this.oasis.poolZ);
-            color.lerp(damp, 1 - smoothstep(5, 8, fromPool));
-
-            color.toArray(colors, i * 3);
+            this.sandColor(positions.getX(i), positions.getZ(i), positions.getY(i), normals.getY(i), color)
+                .toArray(colors, i * 3);
         }
-
         return new THREE.BufferAttribute(colors, 3);
+    }
+
+    // Texture coordinates of the ripple map at a world position (matches the desert mesh)
+    uvAt(x, z) {
+        return [
+            (x - (this.center.x - this.size / 2)) / this.size,
+            1 - (z - (this.center.z - this.size / 2)) / this.size
+        ];
     }
 
     // Where the player may walk: the terrain minus a margin, so the edge stays hidden in the fog

@@ -83,6 +83,13 @@ The journey matters more than the destination:
 - [x] Journey-style glitter: grains flash in the moonlight and sunlight
 - [x] Footstep sound in three phases (heel, roll, toe-off), heavier uphill, skidding downhill, a hiss while sliding
 
+## Sand you can press into ✅
+*Goal: inspired by desert-dusky (Babylon.js/WebGPU): real footprint dents, while staying WebGL and browser-friendly.*
+
+- [x] A 16 m patch of detailed sand follows the player (6 cm vertices, 1.6 cm deformation texture); the shader places, shades and colours it and blends its edge into the desert, so moving it costs only a few milliseconds
+- [x] Each step presses a bare-sole print (deepest at heel and ball, narrower arch, a rim of pushed-aside sand); landings press both feet; sliding cuts a groove with low banks
+- [x] The wind slowly fills dents back in (half-filled after 2.5 minutes); further away, footprint marks carry the trail on and fade after 4-8 minutes
+
 ## Phase 5 — Music of the journey ✅
 *Goal: the music tells the story of the walk.*
 

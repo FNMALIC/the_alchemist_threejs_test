@@ -1,11 +1,16 @@
-// footprints.js - Footprints pressed into the sand, one per step, lying on the dune's surface.
-// Drawn as a darkening "multiply" decal, so they work in moonlight and sunlight alike.
-// All prints are one InstancedMesh (one draw call); the oldest are reused after MAX_PRINTS.
+// footprints.js - The trail of footprints further away, beyond the detailed sand around the player
+// (where prints are real dents, see sandPatch.js). One mark per step, lying on the dune's surface,
+// drawn as a darkening "multiply" decal so they work in moonlight and sunlight alike.
+// All marks are one InstancedMesh (one draw call); the oldest are reused after MAX_PRINTS.
+// The wind slowly covers them: they fade between FADE_START and FADE_END seconds old.
 import * as THREE from 'three';
 
 const MAX_PRINTS = 1500;
 const FOOT_SPACING = 0.11; // Metres from the body's centre line to each foot
 const PRINT_SIZE = { width: 0.15, length: 0.3 };
+const FADE_START = 240;
+const FADE_END = 480;
+const PATCH_EDGE = 1.0; // Show marks in the patch's outer metre, where its dents fade out
 
 // A bare footprint: heel, arch, ball and toes, darker where the foot pressed deepest.
 // White means "no change" with multiply blending.
@@ -43,9 +48,11 @@ function createFootprintTexture() {
 }
 
 export class Footprints {
-    constructor(heightAt) {
+    // hole: { center, half } uniforms of the detailed sand patch, where real dents take over
+    constructor(heightAt, hole) {
         this.heightAt = heightAt;
         this.next = 0;
+        this.time = { value: 0 };
 
         // Flat on the ground, toes toward -Z
         const geometry = new THREE.PlaneGeometry(PRINT_SIZE.width, PRINT_SIZE.length).rotateX(-Math.PI / 2);
@@ -60,6 +67,37 @@ export class Footprints {
             polygonOffsetFactor: -4,
             fog: false
         });
+
+        // When each print was made, for fading
+        this.birth = new THREE.InstancedBufferAttribute(new Float32Array(MAX_PRINTS), 1);
+        this.birth.setUsage(THREE.DynamicDrawUsage);
+        geometry.setAttribute('birth', this.birth);
+
+        const time = this.time;
+        material.onBeforeCompile = shader => {
+            shader.uniforms.printTime = time;
+            shader.uniforms.holeCenter = hole.center;
+            shader.uniforms.holeHalf = hole.half;
+            shader.vertexShader = shader.vertexShader
+                .replace('#include <common>', `#include <common>
+                    attribute float birth;
+                    uniform float printTime;
+                    varying float vPrintFade;
+                    varying vec2 vPrintPosition;`)
+                .replace('#include <project_vertex>', `#include <project_vertex>
+                    vPrintFade = 1.0 - smoothstep(${FADE_START.toFixed(1)}, ${FADE_END.toFixed(1)}, printTime - birth);
+                    vPrintPosition = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xz;`);
+            shader.fragmentShader = shader.fragmentShader
+                .replace('#include <common>', `#include <common>
+                    uniform vec2 holeCenter;
+                    uniform float holeHalf;
+                    varying float vPrintFade;
+                    varying vec2 vPrintPosition;`)
+                .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>
+                    if (all(lessThan(abs(vPrintPosition - holeCenter), vec2(holeHalf - ${PATCH_EDGE.toFixed(1)})))) discard;`)
+                .replace('#include <map_fragment>', `#include <map_fragment>
+                    diffuseColor.rgb = mix(vec3(1.0), diffuseColor.rgb, vPrintFade); // White leaves the sand unchanged`);
+        };
 
         this.mesh = new THREE.InstancedMesh(geometry, material, MAX_PRINTS);
         this.mesh.count = 0;
@@ -97,8 +135,14 @@ export class Footprints {
         this.scale.set(foot < 0 ? -size : size, 1, size); // Mirror the left foot
 
         this.mesh.setMatrixAt(this.next, this.matrix.compose(this.position, this.tilt, this.scale));
+        this.birth.setX(this.next, this.time.value);
+        this.birth.needsUpdate = true;
         this.next = (this.next + 1) % MAX_PRINTS;
         this.mesh.count = Math.min(MAX_PRINTS, this.mesh.count + 1);
         this.mesh.instanceMatrix.needsUpdate = true;
+    }
+
+    update(delta) {
+        this.time.value += delta;
     }
 }

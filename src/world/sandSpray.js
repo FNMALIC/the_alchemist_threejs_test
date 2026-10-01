@@ -96,13 +96,14 @@ export class SandSpray {
                 const z = positions.getZ(i) + this.velocity[v + 2] * delta;
                 const ground = this.heightAt(x, z) + 0.01;
                 if (y <= ground) {
-                    y = ground; // Lands and stays on the dune
+                    y = ground; // Lands on the dune and soon blends into the sand
                     this.settled[i] = 1;
+                    this.life[i] = Math.min(this.life[i], 0.35);
                 }
                 positions.setXYZ(i, x, y, z);
             }
 
-            alphas.setX(i, Math.min(1, this.life[i] * 2) * (this.settled[i] ? 0.5 : 0.85));
+            alphas.setX(i, Math.min(1, this.life[i] * 3) * 0.85);
         }
 
         positions.needsUpdate = true;

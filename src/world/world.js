@@ -5,6 +5,7 @@ import { Sky } from './sky.js';
 import { Dust } from './dust.js';
 import { Footprints } from './footprints.js';
 import { SandSpray } from './sandSpray.js';
+import { SandPatch } from './sandPatch.js';
 import {
     createOldTree, createPalm, createShrub, createRock, createGrassPatch, createFlower, swayGrass
 } from './props.js';
@@ -20,7 +21,8 @@ export class World {
     // oasis: { x, z, poolX, poolZ }, orb: { x, z }
     // skyOptions: { sceneBearing, date } passed to the Sky (see sky.js)
     // shadows: whether the moon and sun cast shadows
-    constructor(scene, { oasis, orb, skyOptions, shadows = true }) {
+    // playerStart: { x, z } where the detailed sand patch starts
+    constructor(scene, { oasis, orb, skyOptions, shadows = true, playerStart = { x: 0, z: 0 } }) {
         this.scene = scene;
         this.oasis = oasis;
         this.orb = orb;
@@ -55,7 +57,9 @@ export class World {
 
         // The sand remembers you: footprints, and grains kicked up as you walk
         const surfaceAt = (x, z) => this.terrain.surfaceHeightAt(x, z);
-        this.footprints = new Footprints(surfaceAt);
+        this.sandPatch = new SandPatch(this.terrain, playerStart.x, playerStart.z);
+        scene.add(this.sandPatch.mesh);
+        this.footprints = new Footprints(surfaceAt, this.terrain.hole);
         scene.add(this.footprints.mesh);
         this.sandSpray = new SandSpray(surfaceAt);
         scene.add(this.sandSpray.points);
@@ -172,6 +176,8 @@ export class World {
         this.scene.fog.density = THREE.MathUtils.lerp(FOG_DENSITY_START, FOG_DENSITY_END, this.sky.dawnProgress);
         this.dust.update(delta, elapsed, camera);
         this.sandSpray.update(delta);
+        this.sandPatch.update(delta, camera.position.x, camera.position.z);
+        this.footprints.update(delta);
         this.updateGlitter();
 
         // Wind comes in slow gusts; grass and palm crowns bend with it

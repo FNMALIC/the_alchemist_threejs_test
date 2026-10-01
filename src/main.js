@@ -37,7 +37,8 @@ const world = new World(scene, {
         date: Number.isNaN(skyDate.getTime()) ? new Date() : skyDate,
         sceneBearing: THREE.MathUtils.radToDeg(Math.atan2(ORB_POSITION.x - PLAYER_START.x, PLAYER_START.z - ORB_POSITION.z))
     },
-    shadows: quality.shadows
+    shadows: quality.shadows,
+    playerStart: { x: PLAYER_START.x, z: PLAYER_START.z }
 });
 
 // The orb, and the warm light it casts on the sand around it
@@ -58,6 +59,7 @@ const player = new Player(camera, document.body, {
 });
 player.placeOnGround();
 let distanceWalked = 0;
+let slideDistance = 0;
 const lastPosition = camera.position.clone();
 const audio = new AmbientAudio(`${import.meta.env.BASE_URL}ambient.mp3`);
 const footsteps = new Footsteps(audio);
@@ -67,7 +69,8 @@ const music = new JourneyMusic(audio);
 player.onStep = step => {
     footsteps.step(step);
     if (step.surface !== 'sand') return;
-    world.footprints.add(step);
+    world.sandPatch.stamp(step); // A real dent nearby...
+    world.footprints.add(step); // ...and a mark that carries the trail on further away
     const ground = world.heightAt(step.x, step.z);
     const backX = -Math.sin(step.heading), backZ = -Math.cos(step.heading);
     world.sandSpray.emit(step.x, ground, step.z, backX * 0.6, backZ * 0.6, 5 + Math.floor(step.intensity * 6), 0.9 + step.downhill);
@@ -75,6 +78,8 @@ player.onStep = step => {
 player.onLand = strength => {
     footsteps.land(strength);
     const { x, z } = player.eye;
+    const heading = Math.atan2(player.heading.x, player.heading.y);
+    [-1, 1].forEach(foot => world.sandPatch.stamp({ x, z, heading, foot }, 1.2 + strength * 0.5));
     const ground = world.heightAt(x, z);
     for (let i = 0; i < 8; i++) {
         const angle = (i / 8) * Math.PI * 2;
@@ -161,6 +166,14 @@ function animate() {
     // Sliding down a dune: a hiss of sand and a spray around the feet
     const slideSpeed = player.slide.length();
     footsteps.slide(slideSpeed);
+    if (slideSpeed > 0.8) {
+        // The feet cut a groove as they slide
+        slideDistance += slideSpeed * delta;
+        if (slideDistance > 0.12) {
+            slideDistance = 0;
+            world.sandPatch.groove(player.eye.x, player.eye.z, player.slide.x / slideSpeed, player.slide.y / slideSpeed);
+        }
+    }
     if (slideSpeed > 0.8 && Math.random() < delta * 30) {
         const { x, z } = player.eye;
         const dx = player.slide.x / slideSpeed, dz = player.slide.y / slideSpeed;

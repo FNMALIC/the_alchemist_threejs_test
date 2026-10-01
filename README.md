@@ -52,7 +52,8 @@ src/
     astronomy.js      Sky positions over Al-Fayoum, dawn times, and the walking-driven sky clock
     props.js          Old tree, palms, shrubs, rocks, grass, flowers
     dust.js           Sand drifting on the wind
-    footprints.js     Footprints left in the sand
+    sandPatch.js      Detailed sand around the player: footprints and slide grooves pressed in as real dents, slowly filled by the wind
+    footprints.js     The footprint trail further away (fades after a few minutes)
     sandSpray.js      Grains kicked up by steps, landings and slides
 ```
 
