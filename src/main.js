@@ -1,7 +1,7 @@
 // main.js - Sets up the scene and runs the experience
 import * as THREE from 'three';
 import { World } from './world/world.js';
-import { Player } from './player.js';
+import { PlayerController } from './player/playerController.js';
 import { Orb } from './orb.js';
 import { AmbientAudio } from './audio.js';
 import { Footsteps } from './footsteps.js';
@@ -13,25 +13,33 @@ import { Traces } from './world/traces.js';
 import { Storm } from './storm.js';
 import { loadMemory, saveMemory, PathRecorder } from './memory.js';
 import { Renderer, getQuality } from './render.js';
+import { InteractionPrompt } from './interactions/interactionPrompt.js';
+import { Environment } from './environment/environment.js';
+import { registerVegetation } from './environment/vegetation.js';
+import { EnvironmentSounds } from './environment/environmentSounds.js';
 
 // The oasis where you wake, and the light far out across the dunes
 const OASIS = { x: 0, z: 0, poolX: -7, poolZ: 1 };
 const ORB_POSITION = new THREE.Vector3(25, 2.2, -150);
 const PLAYER_START = new THREE.Vector3(0, 0, 6);
 const PROXIMITY_RANGE = 40; // How far away the orb starts reacting to you
+const INTERACTION_DISTANCE = 3; // Metres from the eye at which things can be interacted with
+
+const parameters = new URLSearchParams(window.location.search);
 
 // Scene, camera, renderer
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 camera.position.copy(PLAYER_START);
 camera.lookAt(ORB_POSITION.x, 2, ORB_POSITION.z);
+scene.add(camera); // The first-person hands hang from it
 
 const quality = getQuality();
 const renderer = new Renderer(scene, camera, quality);
 
 // World. The real sky of this morning over Al-Fayoum (or ?date=YYYY-MM-DD), turned so the
 // sun rises behind the light.
-const dateParameter = new URLSearchParams(window.location.search).get('date');
+const dateParameter = parameters.get('date');
 const skyDate = dateParameter ? new Date(`${dateParameter}T12:00:00Z`) : new Date();
 const world = new World(scene, {
     oasis: OASIS,
@@ -54,14 +62,22 @@ orbLight.castShadow = false; // Point light shadows are expensive (six renders p
 orbLight.position.copy(ORB_POSITION);
 scene.add(orbLight);
 
-const player = new Player(camera, document.body, {
+const player = new PlayerController(camera, document.body, {
     groundHeightAt: world.heightAt,
     bounds: world.terrain.bounds(),
     colliders: world.colliders,
     isUnderWater: (x, z) => world.isUnderWater(x, z),
     isFirmGround: (x, z) => world.isFirmGround(x, z)
+}, {
+    scene,
+    interaction: {
+        distance: INTERACTION_DISTANCE,
+        // Trunks, the old tree, rocks and the dunes hide what is behind them
+        occlusion: { blockers: world.solids, groundHeightAt: world.heightAt }
+    }
 });
 player.placeOnGround();
+renderer.addViewModel(player.hands.camera); // After the lights are made: they light the hands too
 let distanceWalked = 0;
 let slideDistance = 0;
 const lastPosition = camera.position.clone();
@@ -72,32 +88,28 @@ const footsteps = new Footsteps(audio);
 const FOOTSTEP_SOUNDS = new URLSearchParams(window.location.search).get('footsteps') === 'on';
 const music = new JourneyMusic(audio);
 
-// Every step: a sound, a footprint in the sand, and a few grains kicked back
+// Every step and landing: a sound (if on), and a real dent pressed into the sand nearby. The
+// footprint marks further away and the grains kicked up come from the environment (sandResponse.js)
 player.onStep = step => {
     if (FOOTSTEP_SOUNDS) footsteps.step(step);
-    if (step.surface !== 'sand') return;
-    world.sandPatch.stamp(step); // A real dent nearby...
-    world.footprints.add(step); // ...and a mark that carries the trail on further away
-    const ground = world.heightAt(step.x, step.z);
-    const backX = -Math.sin(step.heading), backZ = -Math.cos(step.heading);
-    world.sandSpray.emit(step.x, ground, step.z, backX * 0.6, backZ * 0.6, 5 + Math.floor(step.intensity * 6), 0.9 + step.downhill);
+    if (step.surface === 'sand') world.sandPatch.stamp(step);
 };
 player.onLand = strength => {
     if (FOOTSTEP_SOUNDS) footsteps.land(strength);
     const { x, z } = player.eye;
-    const heading = Math.atan2(player.heading.x, player.heading.y);
+    const heading = Math.atan2(player.movement.heading.x, player.movement.heading.y);
     [-1, 1].forEach(foot => world.sandPatch.stamp({ x, z, heading, foot }, 1.2 + strength * 0.5));
-    const ground = world.heightAt(x, z);
-    for (let i = 0; i < 8; i++) {
-        const angle = (i / 8) * Math.PI * 2;
-        world.sandSpray.emit(x, ground, z, Math.cos(angle), Math.sin(angle), 4, 1 + strength * 1.5, 0.3);
-    }
 };
 // Someone else walked here before you. And the desert remembers your earlier walks.
 const memory = loadMemory();
 const traces = new Traces(world, world.oldTree.position, ORB_POSITION, memory);
 const pathRecorder = new PathRecorder();
 const storm = new Storm();
+
+// The world noticing the player: sand under the feet, shrubs and flowers that move as you pass
+const environment = new Environment({ player, world, scene, low: quality.low });
+registerVegetation(environment, world.vegetation);
+new EnvironmentSounds(audio, environment, camera);
 
 // UI
 const ui = {
@@ -106,9 +118,31 @@ const ui = {
     fadeOverlay: document.getElementById('fade-overlay'),
     restartButton: document.getElementById('restart-button'),
     hint: document.getElementById('hint'),
-    volumeSlider: document.getElementById('volume-slider')
+    volumeSlider: document.getElementById('volume-slider'),
+    crosshair: document.getElementById('crosshair'),
+    interactionPrompt: document.getElementById('interaction-prompt')
 };
 const storyText = new StoryText(ui.story);
+new InteractionPrompt(player.interaction, { element: ui.interactionPrompt, crosshair: ui.crosshair });
+
+// Development only (left out of production builds): a test stone and flower to try the
+// interaction system on (?fixtures=off leaves them out), and ?debug shows what the gaze rests on
+let testInteractables = null;
+let interactionDebug = null;
+if (import.meta.env.DEV) {
+    if (parameters.get('fixtures') !== 'off') {
+        import('./interactions/testInteractables.js').then(({ createTestInteractables }) => {
+            testInteractables = createTestInteractables({
+                world, interaction: player.interaction, origin: PLAYER_START, toward: ORB_POSITION
+            });
+        });
+    }
+    if (parameters.has('debug')) {
+        import('./interactions/interactionDebug.js').then(({ InteractionDebug }) => {
+            interactionDebug = new InteractionDebug(player.interaction, environment);
+        });
+    }
+}
 
 // Story
 const storyState = {
@@ -146,7 +180,8 @@ const moments = new Moments(storyText, [
 ], () => story.current);
 
 document.addEventListener('keydown', event => {
-    if (event.code === 'KeyE' && story.current === 'morning') storyState.wantsToSit = true;
+    // E is also for interacting: it only means "sit" when nothing is in focus
+    if (event.code === 'KeyE' && story.current === 'morning' && !player.interaction.target) storyState.wantsToSit = true;
 });
 
 // Click to start: lock the pointer and start audio (browsers require a user gesture)
@@ -160,8 +195,15 @@ document.addEventListener('click', event => {
     }
 });
 
-player.controls.addEventListener('lock', () => ui.instructions.classList.add('hidden'));
-player.controls.addEventListener('unlock', () => ui.instructions.classList.remove('hidden'));
+// While the pointer is locked the crosshair shows; the instructions and volume control step aside
+player.pointerLock.addEventListener('lock', () => {
+    ui.instructions.classList.add('hidden');
+    document.body.classList.add('locked');
+});
+player.pointerLock.addEventListener('unlock', () => {
+    ui.instructions.classList.remove('hidden');
+    document.body.classList.remove('locked');
+});
 
 audio.setUserVolume(Number(ui.volumeSlider.value));
 ui.volumeSlider.addEventListener('input', () => {
@@ -181,6 +223,7 @@ function animate() {
 
     // Physics in small steps, even when fast-forwarding
     for (let remaining = delta; remaining > 1e-6; remaining -= 0.1) player.update(Math.min(remaining, 0.1));
+    environment.update(delta);
     // Measured from the eye position, so the head's sway doesn't count as walking
     distanceWalked += Math.hypot(player.eye.x - lastPosition.x, player.eye.z - lastPosition.z);
     lastPosition.copy(player.eye);
@@ -206,28 +249,22 @@ function animate() {
     const stormIntensity = storm.update(delta, distanceWalked, storyState.distanceToOrb, story.current === 'crossing');
     world.storm = stormIntensity;
     player.storm = stormIntensity;
-    const gust = 0.6 + 0.4 * Math.sin(elapsed * 0.35) + 0.2 * Math.sin(elapsed * 1.3 + 1);
-    traces.update(elapsed, gust + stormIntensity * 2);
     world.update(delta, elapsed, camera, distanceWalked);
+    interactionDebug?.update(delta);
 
     // The music grows with the walk and turns toward morning at first light
     music.update(delta, { progress: world.sky.dawnProgress, sunAltitude: world.sky.sunAltitude, storm: stormIntensity });
 
-    // Sliding down a dune: a hiss of sand and a spray around the feet
+    // Sliding down a dune: a hiss of sand (if on) and a groove cut by the feet (the spray around
+    // the feet comes from the environment)
     const slideSpeed = player.slide.length();
     if (FOOTSTEP_SOUNDS) footsteps.slide(slideSpeed);
     if (slideSpeed > 0.8) {
-        // The feet cut a groove as they slide
         slideDistance += slideSpeed * delta;
         if (slideDistance > 0.12) {
             slideDistance = 0;
             world.sandPatch.groove(player.eye.x, player.eye.z, player.slide.x / slideSpeed, player.slide.y / slideSpeed);
         }
-    }
-    if (slideSpeed > 0.8 && Math.random() < delta * 30) {
-        const { x, z } = player.eye;
-        const dx = player.slide.x / slideSpeed, dz = player.slide.y / slideSpeed;
-        world.sandSpray.emit(x + dx * 0.3, world.heightAt(x, z), z + dz * 0.3, dx * 0.5, dz * 0.5, 3, 0.6 + slideSpeed * 0.3, 0.9);
     }
     world.updateEnvironment(renderer.renderer);
 
@@ -238,5 +275,11 @@ renderer.renderer.setAnimationLoop(animate);
 
 // Dev-only handle for debugging in the browser console (stripped from production builds)
 if (import.meta.env.DEV) {
-    window.mirage = { scene, camera, player, orb, world, story, storyState, renderer: renderer.renderer, music, audio, traces, debug, storm };
+    window.mirage = {
+        scene, camera, player, orb, world, story, storyState, renderer: renderer.renderer,
+        music, audio, traces, debug, storm,
+        interaction: player.interaction,
+        environment,
+        get testInteractables() { return testInteractables; }
+    };
 }

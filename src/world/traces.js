@@ -1,9 +1,8 @@
 // traces.js - Someone made this walk before you. You never meet them; you only find what they
 // left: a trail of old, half-erased footprints that wanders out to the light and turns back
 // home, a cold campfire, a dry well, a water jar, and a small stack of stones under the old tree.
-// At each place, a scrap of a letter weighted with a stone, and a cloth on a stick that the
-// wind moves, so the eye finds it from afar. The letters are written to someone they left
-// behind, asleep under the old tree: you.
+// At each place, a scrap of a letter weighted with a stone. The letters are written to someone
+// they left behind, asleep under the old tree: you.
 //
 // The desert also remembers you (see memory.js): your last walk is still faintly in the sand,
 // and each time you have sat under the tree, a pebble lies beside their stones.
@@ -38,8 +37,6 @@ const ash = new THREE.MeshStandardMaterial({ color: 0x45403a, roughness: 1 });
 const clay = new THREE.MeshStandardMaterial({ color: 0x9a5a36, roughness: 0.85 });
 const darkness = new THREE.MeshBasicMaterial({ color: 0x050403 });
 const paper = new THREE.MeshStandardMaterial({ color: 0xe8dcc0, roughness: 0.9, side: THREE.DoubleSide });
-const pole = new THREE.MeshStandardMaterial({ color: 0x5a4632, roughness: 1 });
-const cloth = new THREE.MeshStandardMaterial({ color: 0x8a3b2c, roughness: 0.95, side: THREE.DoubleSide });
 
 export class Traces {
     // world: the World (for heightAt, surface heights and adding objects); oldTree: { x, z }
@@ -47,7 +44,6 @@ export class Traces {
     constructor(world, oldTree, lightPosition, memory = { journeys: 0, path: [] }) {
         this.world = world;
         this.heightAt = world.heightAt;
-        this.flags = [];
         // Old prints sit on whichever is higher: the true dune shape or the coarse mesh
         const groundAt = (x, z) => Math.max(this.heightAt(x, z), world.terrain.surfaceHeightAt(x, z));
 
@@ -57,7 +53,7 @@ export class Traces {
         // Where the light was, their turn for home is clear; further on the wind has taken more
         this.homeward = this.layTrail(HOMEWARD, 0.4, 25);
 
-        // The places they stopped, each with a letter and a cloth that the wind moves
+        // The places they stopped, each with a letter
         const campfire = this.campfire(1.5, -32);
         const well = this.well(11.5, -100);
         const jar = this.jar(16.5, -124.5);
@@ -66,9 +62,6 @@ export class Traces {
         this.note(well.x - 1.4, well.z + 0.4, -0.3);
         this.note(jar.x + 0.5, jar.z + 0.5, 1.1);
         this.note(turn.x, turn.z, 2.2);
-        this.flag(campfire.x + 0.9, campfire.z - 0.4);
-        this.flag(well.x + 1.5, well.z - 0.6);
-        this.flag(jar.x - 0.7, jar.z - 0.6);
 
         // Under the old tree: a seat facing the desert, and their small stack of stones beside it
         const toLight = new THREE.Vector2(lightPosition.x - oldTree.x, lightPosition.z - oldTree.z).normalize();
@@ -112,21 +105,6 @@ export class Traces {
         return path;
     }
 
-    // Animate the cloths in the wind. gust: 0 still .. 1+ windy
-    update(elapsed, gust = 1) {
-        for (const { mesh, rest } of this.flags) {
-            const positions = mesh.geometry.attributes.position;
-            for (let i = 0; i < positions.count; i++) {
-                const x = rest[i * 3], y = rest[i * 3 + 1];
-                const along = x / 0.45; // 0 at the pole, 1 at the free end
-                const wave = Math.sin(elapsed * 5 - x * 9 + y * 2) * 0.07 * along * (0.5 + gust);
-                positions.setXYZ(i, x, y - along * along * 0.04 * (1.5 - Math.min(1, gust)), rest[i * 3 + 2] + wave);
-            }
-            positions.needsUpdate = true;
-            mesh.geometry.computeVertexNormals();
-        }
-    }
-
     // A scrap of paper, folded once, held down by a small stone
     note(x, z, turn) {
         const y = this.ground(x, z);
@@ -141,24 +119,6 @@ export class Traces {
         const stone = createRock(x + 0.04, z - 0.05, 0.05, this.heightAt, 0x7a6a5a);
         stone.position.y = y + 0.04;
         this.world.add(stone);
-    }
-
-    // A walking stick pushed into the sand with a strip of cloth tied to it
-    flag(x, z) {
-        const y = this.ground(x, z);
-        const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.025, 1.7, 6), pole);
-        stick.position.set(x, y + 0.75, z);
-        stick.rotation.z = 0.06;
-        stick.castShadow = true;
-        this.world.add(stick);
-
-        const geometry = new THREE.PlaneGeometry(0.45, 0.22, 10, 3).translate(0.225, 0, 0);
-        const strip = new THREE.Mesh(geometry, cloth);
-        strip.position.set(x + 0.03, y + 1.45, z);
-        strip.rotation.y = -0.5;
-        strip.castShadow = true;
-        this.world.add(strip);
-        this.flags.push({ mesh: strip, rest: Float32Array.from(geometry.attributes.position.array) });
     }
 
     // Footprints along a smooth path through the given points; some are lost to the wind,

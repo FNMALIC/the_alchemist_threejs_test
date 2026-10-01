@@ -1,4 +1,4 @@
-// player.js - First-person movement on sand: walking and hurrying, climbing and sliding on dunes,
+// movement.js - Moving the body over sand: walking and hurrying, climbing and sliding on dunes,
 // sinking a little into soft sand, wading, jumping and bumping into things.
 //
 // Sand physics (simplified):
@@ -9,26 +9,11 @@
 //   sliding downhill loosens it, so from ~22° you start to slide, and gathering speed
 //   down a dune face is like surfing.
 import * as THREE from 'three';
-import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls.js';
-import { Gait } from './gait.js';
 
-const KEY_BINDINGS = {
-    ArrowUp: 'forward',
-    KeyW: 'forward',
-    ArrowDown: 'backward',
-    KeyS: 'backward',
-    ArrowLeft: 'left',
-    KeyA: 'left',
-    ArrowRight: 'right',
-    KeyD: 'right',
-    ShiftLeft: 'hurry',
-    ShiftRight: 'hurry'
-};
-
-const WALK_SPEED = 2.0; // m/s: an unhurried walk
-const HURRY_SPEED = 3.4; // m/s with Shift held
+export const WALK_SPEED = 2.0; // m/s: an unhurried walk
+export const HURRY_SPEED = 3.4; // m/s with Shift held
 const DAMPING = 8.0; // How quickly walking speed settles (higher = snappier)
-const EYE_HEIGHT = 1.7;
+export const EYE_HEIGHT = 1.7;
 const BODY_RADIUS = 0.35; // For bumping into trunks and rocks
 
 const GRAVITY = 9.8;
@@ -45,88 +30,66 @@ const SINK_DEPTH = 0.04; // Metres the feet sink into soft sand
 const WADING_SPEED = 0.5; // Fraction of normal speed in the pool
 const SITTING_EYE_HEIGHT = 0.95;
 
-export class Player {
+export class Movement {
+    // position: the eye position (without the head's motion), moved in place
     // groundHeightAt(x, z): terrain height; bounds: { minX, maxX, minZ, maxZ } the player stays within
     // colliders: [{ x, z, radius }] solid things; isUnderWater(x, z): whether a spot is in the pool
     // isFirmGround(x, z): damp, packed sand that doesn't give way (e.g. around the pool)
-    constructor(camera, domElement, {
+    constructor(position, {
         groundHeightAt, bounds, colliders = [], isUnderWater = () => false, isFirmGround = () => false
     }) {
-        this.camera = camera;
+        this.position = position;
         this.groundHeightAt = groundHeightAt;
         this.bounds = bounds;
         this.colliders = colliders;
         this.isUnderWater = isUnderWater;
         this.isFirmGround = isFirmGround;
-        this.controls = new PointerLockControls(camera, domElement);
 
-        this.velocity = new THREE.Vector3(); // Walking velocity in camera space (x: right, z: back)
+        this.velocity = new THREE.Vector3(); // Walking velocity in body space (x: right, z: back)
         this.direction = new THREE.Vector3();
         this.slide = new THREE.Vector2(); // Sliding velocity over the ground (x, z)
         this.moving = { forward: false, backward: false, left: false, right: false, hurry: false };
 
-        // Eye position without the walking motion; the camera is placed relative to it every frame
-        this.eye = camera.position.clone();
         this.verticalSpeed = 0;
         this.grounded = true;
         this.wading = false;
+        this.walking = false; // Whether the feet are walking under the player's control this frame
         this.sink = 0;
         this.effort = 0; // 0..1 how hard the going is, for the gait and the footstep sounds
         this.walkSlope = 0; // Slope along the walking direction: positive uphill
         this.heading = new THREE.Vector2(0, -1); // Direction of travel on the ground
         this.speed = 0; // Horizontal ground speed (m/s), walking and sliding combined
 
-        this.gait = new Gait();
-        this.storm = 0; // 0 calm .. 1 sandstorm: walking is slowed, the wind pushes and shakes
+        this.storm = 0; // 0 calm .. 1 sandstorm: walking is slowed and the wind pushes
         this.windDirection = new THREE.Vector2(1.6, 0.6).normalize();
         this.time = 0;
-        this.seated = null; // { x, z, lookX, lookZ, time } once sitting down
-        this.appliedRoll = 0;
-        this.sideways = new THREE.Vector3();
+        this.seated = null; // { x, z } once sitting down
         this.gradient = new THREE.Vector2();
+        this.frameStart = new THREE.Vector3(); // Reused every frame
+        this.stepStart = new THREE.Vector3();
 
-        // Hooks: onStep(step) when a foot lands, onLand(strength) after a jump
-        // step: { surface: 'sand' | 'water', intensity, foot, x, z, heading, effort, downhill }
-        this.onStep = null;
+        // Hook: onLand(strength) when the feet touch down after a jump (strength 0..1)
         this.onLand = null;
-
-        document.addEventListener('keydown', event => {
-            this.setKey(event.code, true);
-            if (event.code === 'Space') this.jump();
-        });
-        document.addEventListener('keyup', event => this.setKey(event.code, false));
-    }
-
-    get isLocked() {
-        return this.controls.isLocked;
     }
 
     get sliding() {
         return this.slide.length() > 0.8;
     }
 
-    lock() {
-        this.controls.lock();
-    }
-
-    setKey(code, pressed) {
-        const action = KEY_BINDINGS[code];
-        if (action) this.moving[action] = pressed;
-    }
-
+    // Returns whether the jump happened (feet on the ground, and not in the water)
     jump() {
-        if (this.seated) return;
-        const { x, z } = this.eye;
-        if (!this.controls.isLocked || !this.grounded || this.isUnderWater(x, z)) return; // No jumping out of water
+        if (this.seated) return false;
+        const { x, z } = this.position;
+        if (!this.grounded || this.isUnderWater(x, z)) return false;
         this.verticalSpeed = JUMP_SPEED;
         this.grounded = false;
+        return true;
     }
 
-    // Put the player at eye height above the ground at the camera's current position
+    // Put the eye at eye height above the ground where it stands
     placeOnGround() {
-        this.eye.copy(this.camera.position);
-        this.eye.y = this.groundHeightAt(this.eye.x, this.eye.z) + EYE_HEIGHT;
-        this.camera.position.copy(this.eye);
+        const position = this.position;
+        position.y = this.groundHeightAt(position.x, position.z) + EYE_HEIGHT;
         this.slide.set(0, 0);
     }
 
@@ -139,53 +102,48 @@ export class Player {
         );
     }
 
-    // Sit down at (x, z), turning gently to face (lookX, lookZ). There is no getting up.
-    sit(x, z, lookX, lookZ) {
-        this.seated = { x, z, lookX, lookZ, time: 0 };
+    // Sit down at (x, z). There is no getting up.
+    sit(x, z) {
+        this.seated = { x, z };
         this.velocity.set(0, 0, 0);
         this.slide.set(0, 0);
         Object.keys(this.moving).forEach(key => { this.moving[key] = false; });
     }
 
-    update(delta) {
-        // Work from the eye position, without last frame's walking motion
-        this.camera.position.copy(this.eye);
-        this.camera.rotateZ(-this.appliedRoll);
-        this.appliedRoll = 0;
-
+    // yaw: the direction the body faces (radians, as the camera's); enabled: whether the
+    // player is in control (the pointer is locked). Sliding and falling go on regardless.
+    update(delta, yaw, enabled) {
+        const position = this.position;
         if (this.seated) {
             this.sitDown(delta);
             return;
         }
 
         this.time += delta;
-        const before = this.camera.position.clone();
-        const walking = this.controls.isLocked && this.walk(delta);
-        this.slideOnSand(delta, walking);
+        const before = this.frameStart.copy(position);
+
+        this.walking = enabled && this.walk(delta, yaw);
+        this.slideOnSand(delta, this.walking);
         // The storm's wind pushes you sideways, in gusts
         if (this.storm > 0 && this.grounded) {
             const gust = 0.6 + 0.4 * Math.sin(this.time * 1.7) * Math.sin(this.time * 0.6);
-            this.camera.position.x += this.windDirection.x * 0.5 * this.storm * gust * delta;
-            this.camera.position.z += this.windDirection.y * 0.5 * this.storm * gust * delta;
+            position.x += this.windDirection.x * 0.5 * this.storm * gust * delta;
+            position.z += this.windDirection.y * 0.5 * this.storm * gust * delta;
         }
-        this.collide(this.camera.position);
-        this.keepInBounds(this.camera.position);
+        this.collide(position);
+        this.keepInBounds(position);
         this.fall(delta);
 
-        const position = this.camera.position;
         const moved = Math.hypot(position.x - before.x, position.z - before.z);
         this.speed = moved / Math.max(delta, 1e-4);
         if (moved > 1e-4) this.heading.set(position.x - before.x, position.z - before.z).normalize();
-
-        this.eye.copy(position);
-        this.animateHead(delta, walking);
     }
 
     // Walking under the player's control; returns whether the player is trying to walk
-    walk(delta) {
+    walk(delta, yaw) {
         const { velocity, direction, moving } = this;
-        const position = this.camera.position;
-        const before = position.clone();
+        const position = this.position;
+        const before = this.stepStart.copy(position);
 
         const targetSpeed = moving.hurry ? HURRY_SPEED : WALK_SPEED;
         const acceleration = targetSpeed * DAMPING;
@@ -203,8 +161,13 @@ export class Player {
         if (moving.forward || moving.backward) velocity.z -= direction.z * acceleration * control * delta;
         if (moving.left || moving.right) velocity.x -= direction.x * acceleration * control * delta;
 
-        this.controls.moveRight(-velocity.x * delta);
-        this.controls.moveForward(-velocity.z * delta);
+        // Step along the ground in the direction the body faces
+        const right = -velocity.x * delta;
+        const forward = -velocity.z * delta;
+        const sin = Math.sin(yaw);
+        const cos = Math.cos(yaw);
+        position.x += cos * right - sin * forward;
+        position.z += -sin * right - cos * forward;
 
         // How the ground slows the step
         const stepX = position.x - before.x;
@@ -243,7 +206,7 @@ export class Player {
 
     // Sliding on sand: gravity pulls down the slope, friction and drag hold back
     slideOnSand(delta, walking) {
-        const position = this.camera.position;
+        const position = this.position;
         const slide = this.slide;
 
         if (!this.grounded || this.isUnderWater(position.x, position.z) || this.isFirmGround(position.x, position.z)) {
@@ -308,7 +271,7 @@ export class Player {
 
     // Gravity: follow the dunes when on the ground, arc through the air after a jump
     fall(delta) {
-        const position = this.camera.position;
+        const position = this.position;
         this.wading = this.grounded && this.isUnderWater(position.x, position.z);
 
         // Feet sink a little into soft sand, not into packed sand or the pool's bed
@@ -329,57 +292,19 @@ export class Player {
             position.y = groundEye;
             this.verticalSpeed = 0;
             this.grounded = true;
-            this.gait.impulse(0.6 + strength * 0.8); // Knees absorb the landing
             this.onLand?.(strength);
         }
     }
 
-    // Lower the eye to the seat over a few seconds and turn toward the view; looking around is still free
+    // Lower the eye to the seat over a few seconds
     sitDown(delta) {
-        const seat = this.seated;
-        seat.time += delta;
+        const { x, z } = this.seated;
+        const position = this.position;
         const ease = Math.min(1, delta * 1.5);
-        const target = new THREE.Vector3(seat.x, this.groundHeightAt(seat.x, seat.z) + SITTING_EYE_HEIGHT, seat.z);
-        this.camera.position.lerp(target, ease);
-
-        if (seat.time < 3) {
-            const view = new THREE.Object3D();
-            view.position.copy(this.camera.position);
-            view.lookAt(seat.lookX, this.camera.position.y + 0.5, seat.lookZ);
-            view.rotateY(Math.PI); // Object3D.lookAt points +Z at the target; cameras look down -Z
-            this.camera.quaternion.slerp(view.quaternion, Math.min(1, delta * 1.2));
-        }
-        this.eye.copy(this.camera.position);
+        position.x += (x - position.x) * ease;
+        position.z += (z - position.z) * ease;
+        position.y += (this.groundHeightAt(x, z) + SITTING_EYE_HEIGHT - position.y) * ease;
+        this.walking = false;
         this.speed = 0;
-    }
-
-    // The walking motion of the head, applied on top of the eye position
-    animateHead(delta, walking) {
-        const walkSpeed = this.sliding ? 0 : this.speed;
-        const stepped = this.gait.update(delta, walkSpeed, walking && !this.sliding, this.effort);
-
-        if (stepped) {
-            const gradient = this.slopeAt(this.eye.x, this.eye.z);
-            this.onStep?.({
-                surface: this.wading ? 'water' : 'sand',
-                intensity: Math.min(1, walkSpeed / WALK_SPEED),
-                foot: this.gait.foot,
-                x: this.eye.x,
-                z: this.eye.z,
-                heading: Math.atan2(this.heading.x, this.heading.y),
-                effort: this.effort,
-                downhill: Math.max(0, -(gradient.x * this.heading.x + gradient.y * this.heading.y))
-            });
-        }
-
-        this.sideways.set(1, 0, 0).applyQuaternion(this.camera.quaternion).setY(0).normalize();
-        this.camera.position.y += this.gait.offsetY;
-        this.camera.position.addScaledVector(this.sideways, this.gait.offsetSide);
-        // Buffeted by the storm: small, uneven shakes
-        const t = this.time;
-        const buffet = this.storm * (Math.sin(t * 13.1) * Math.sin(t * 2.3) + 0.5 * Math.sin(t * 7.7));
-        this.camera.position.y += buffet * 0.012;
-        this.appliedRoll = this.gait.rollAngle + buffet * 0.006;
-        this.camera.rotateZ(this.appliedRoll);
     }
 }

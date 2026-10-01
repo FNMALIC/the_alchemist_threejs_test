@@ -34,6 +34,8 @@ export class World {
         this.palms = [];
         this.colliders = []; // { x, z, radius } circles the player can't walk into
         this.storm = 0; // 0 calm .. 1 sandstorm (set from main.js)
+        this.solids = []; // The objects those belong to (trunks, the old tree, rocks): they block the view
+        this.vegetation = []; // { object, kind: 'shrub' | 'flower' } plants that can respond to the player
 
         this.terrain = new Terrain({ oasis, orb });
         this.heightAt = (x, z) => this.terrain.heightAt(x, z);
@@ -73,7 +75,10 @@ export class World {
 
     add(object) {
         this.scene.add(object);
-        if (object.userData.collider) this.colliders.push(object.userData.collider);
+        if (object.userData.collider) {
+            this.colliders.push(object.userData.collider);
+            this.solids.push(object);
+        }
         return object;
     }
 
@@ -129,7 +134,8 @@ export class World {
         for (let i = 0; i < 12; i++) {
             const angle = Math.random() * Math.PI * 2;
             const radius = 5.5 + Math.random() * 2.5;
-            this.add(createFlower(poolX + Math.cos(angle) * radius, poolZ + Math.sin(angle) * radius, heightAt));
+            const flower = this.add(createFlower(poolX + Math.cos(angle) * radius, poolZ + Math.sin(angle) * radius, heightAt));
+            this.vegetation.push({ object: flower, kind: 'flower' });
         }
 
         for (let i = 0; i < 4; i++) {
@@ -160,7 +166,7 @@ export class World {
 
         for (let i = 0; i < 70; i++) {
             const { x, z } = randomDesertPoint();
-            this.add(createShrub(x, z, heightAt));
+            this.vegetation.push({ object: this.add(createShrub(x, z, heightAt)), kind: 'shrub' });
         }
 
         // Outcrops roughly along the way, so the crossing has landmarks
