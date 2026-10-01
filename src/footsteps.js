@@ -11,7 +11,7 @@ const VARIATIONS = 8;
 const LOUDNESS = 0.9;
 
 // Simple one-pole filters, run over a Float32Array in place
-function lowpass(data, cutoff, sampleRate) {
+export function lowpass(data, cutoff, sampleRate) {
     const a = 1 - Math.exp((-2 * Math.PI * cutoff) / sampleRate);
     let y = 0;
     for (let i = 0; i < data.length; i++) {
@@ -20,7 +20,7 @@ function lowpass(data, cutoff, sampleRate) {
     }
 }
 
-function highpass(data, cutoff, sampleRate) {
+export function highpass(data, cutoff, sampleRate) {
     const a = 1 - Math.exp((-2 * Math.PI * cutoff) / sampleRate);
     let low = 0;
     for (let i = 0; i < data.length; i++) {
@@ -29,14 +29,14 @@ function highpass(data, cutoff, sampleRate) {
     }
 }
 
-function normalize(data, peak) {
+export function normalize(data, peak) {
     let max = 0;
     for (let i = 0; i < data.length; i++) max = Math.max(max, Math.abs(data[i]));
     if (max > 0) for (let i = 0; i < data.length; i++) data[i] *= peak / max;
 }
 
 // Scatter grain clicks into `target`, with density following `density(time)` (0..1)
-function scatterGrains(target, sampleRate, count, from, to, density, loudness = 1) {
+export function scatterGrains(target, sampleRate, count, from, to, density, loudness = 1) {
     let placed = 0;
     while (placed < count) {
         const time = from + Math.random() * (to - from);

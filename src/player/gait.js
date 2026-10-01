@@ -7,19 +7,7 @@
 //   with a hint of roll.
 // - Every offset goes through a critically damped spring, so the motion has weight and
 //   lag instead of following a perfect sine wave, and no two steps are exactly alike.
-
-const LN2 = Math.log(2);
-
-// Critically damped spring (see Daniel Holden, "Spring-It-On: The Game Developer's Spring-Roll-Call")
-// state: { x, v }; moves x toward target, reaching half the distance in about `halfLife` seconds
-function spring(state, target, halfLife, dt) {
-    const y = (2 * LN2) / halfLife;
-    const j0 = state.x - target;
-    const j1 = state.v + j0 * y;
-    const decay = Math.exp(-y * dt);
-    state.x = decay * (j0 + j1 * dt) + target;
-    state.v = decay * (state.v - j1 * y * dt);
-}
+import { spring } from './spring.js';
 
 const BOB_HEIGHT = 0.032; // Metres between the lowest and highest point of a step at walking pace
 const SWAY = 0.018; // Metres the head drifts over the supporting foot

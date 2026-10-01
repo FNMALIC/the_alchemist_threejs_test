@@ -83,6 +83,45 @@ The journey matters more than the destination:
 - [x] Journey-style glitter: grains flash in the moonlight and sunlight
 - [x] Footstep sound in three phases (heel, roll, toe-off), heavier uphill, skidding downhill, a hiss while sliding
 
+## First-person presence ✅
+*Goal: not a camera moving through the desert, but standing inside it.*
+
+- [x] Player split into modules under `src/player/`: pointer lock, mouse look, movement, movement state, breathing, head motion, hands
+- [x] Mouse turns the body (yaw) and tilts the head (pitch, clamped to +85° / −80°); Esc releases the mouse, a click takes it back, held keys are let go
+- [x] One movement state for everything to react to: idle, walking, sprinting, sliding, jumping, falling, landing
+- [x] Two low-poly hands in linen sleeves at the bottom of the view, drawn in their own pass so they never sink into palms or rocks
+- [x] Hands breathe when still, swing gently with the steps (more when hurrying), trail behind quick turns, lift in a jump and settle on landing, ease outward when sliding, and sink out of view when you look up at the sky
+- [x] Breathing when standing still (quicker and deeper after hurrying) and a small nod on landing, on top of the existing gait
+- [x] A faint centre dot while looking around; the volume control steps aside until Esc
+
+## Noticing things ✅
+*Goal: the foundation for interaction — look, notice, focus, interact, the world responds.*
+
+- [x] A generic interaction system (`src/interactions/`), separate from the player controller; it never knows what a thing is, only the interactable contract (`onFocus`, `onBlur`, `interact`)
+- [x] Registry of interactable things; the gaze only ever tests those, never the rest of the scene
+- [x] Gaze from the centre of the view, within a configurable reach (3 m), with a little aim tolerance for small things and a little hold so focus doesn't flicker
+- [x] Focus states (none → focused → interacting) with `focus`, `blur`, `targetchange`, `interact` and `interactend` events; interactions may be instant or take time
+- [x] A gentle warm edge light on what is in focus, without touching its materials; a quiet "E  Examine" prompt; the crosshair opens into a faint ring
+- [x] E interacts once per press (holding doesn't repeat unless allowed); nothing happens while the pointer is free
+- [x] Hands lift a touch when something is in focus; the right hand makes a small reach on E
+- [x] Development fixtures (a stone and a flower near the start, dev server only) and a `?debug` readout
+- [x] Story subtitles sit just above the left hand instead of over it
+
+## The world notices you ✅
+*Goal: your presence has consequences — the sand, the plants and the stones answer you, quietly.*
+
+- [x] An environment system (`src/environment/`) that listens to what the player does (steps, landings, where they stand, what they touch) and lets nearby reactive things respond in their own way; the player knows nothing about them
+- [x] Reactive objects register and unregister; a spatial grid means only nearby ones are looked at; enter / leave once each, with a little margin so standing at the edge doesn't flicker
+- [x] Interactables can respond to presence too (`onProximity`, `onLeaveProximity`, `onStepNearby`, `onLandNearby`, `response`), fully backwards compatible
+- [x] Plants (the desert's shrubs and the oasis flowers): lean away while you are near and ease back after, shiver at nearby footsteps (more when hurrying) and landings, away from your feet and along your way; walking right through a shrub brushes your hand
+- [x] Stones rock in their bed when touched: tip, lift and shift a little, push sand aside, settle back within a second or so; E waits until they have settled
+- [x] Sand: footprints and grains as before, plus more grains and a faint puff when hurrying, a ring of grains and dust on landing, a trickle of dust while sliding
+- [x] Pooled particles (dust, pollen, dry bits), coloured by the light so they never glow at night; fewer and shorter-lived in `?quality=low`, secondary ones left out
+- [x] Small sounds made in the browser: dry rustles, a stone shifting, sand sifting; the environment's events are the hooks for more later
+- [x] The hand pauses a moment at the touch before coming back
+- [x] Solid things (trunks, the old tree, rocks, dunes) hide what is behind them from the gaze
+- [x] `dynamic` interactables and reactive objects: their bounds follow them each frame, cheaply
+
 ## Phase 5 — Music of the journey
 *Goal: the music tells the story of the walk.*
 

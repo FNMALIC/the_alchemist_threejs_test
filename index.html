@@ -4,8 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>The Mirage of Light</title>
+  <link rel="icon" href="data:,">
   <style>
     body { margin: 0; overflow: hidden; background-color: black; }
+    /* How high the first-person hands reach up the screen while walking. Their lens has a fixed
+       vertical angle, so this share of the height holds at any window size. */
+    :root { --hands-top: 23vh; }
     canvas { display: block; }
 
     #audio-controls {
@@ -29,6 +33,82 @@
       width: 100px;
       accent-color: #ffcc66;
     }
+    #audio-controls { transition: opacity 0.6s ease, visibility 0.6s; }
+    /* It can't be used while the pointer is locked, so it steps aside until Esc */
+    body.locked #audio-controls { opacity: 0; visibility: hidden; }
+
+    /* A faint point at the centre of the view, only while looking around */
+    #crosshair {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 3px;
+      height: 3px;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(255, 250, 240, 0.5);
+      box-shadow: 0 0 2px rgba(0, 0, 0, 0.45), 0 0 6px rgba(255, 204, 102, 0.2);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.6s ease;
+    }
+    body.locked #crosshair { opacity: 1; }
+    /* Something in focus: the point opens into a faint ring */
+    #crosshair::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 11px;
+      height: 11px;
+      box-sizing: border-box;
+      border: 1px solid rgba(255, 226, 176, 0.6);
+      border-radius: 50%;
+      transform: translate(-50%, -50%) scale(0.3);
+      opacity: 0;
+      transition: opacity 0.2s ease, transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    #crosshair.focused::after { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+
+    /* What can be done with the thing in focus: one quiet line under the crosshair */
+    #interaction-prompt {
+      position: absolute;
+      top: calc(50% + 20px);
+      left: 50%;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transform: translate(-50%, 3px);
+      color: rgba(255, 250, 240, 0.8);
+      font-family: Georgia, 'Times New Roman', serif;
+      font-size: 14px;
+      font-style: italic;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+      text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.12s ease, transform 0.12s ease; /* Gone almost at once */
+    }
+    #interaction-prompt.visible {
+      opacity: 1;
+      transform: translate(-50%, 0);
+      transition: opacity 0.35s ease, transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    #interaction-prompt.busy { opacity: 0.4; } /* A longer interaction is playing out */
+    #interaction-prompt .key {
+      min-width: 15px;
+      box-sizing: border-box;
+      padding: 0 3px;
+      border: 1px solid rgba(255, 226, 176, 0.5);
+      border-radius: 4px;
+      color: rgba(255, 226, 176, 0.9);
+      font-size: 11px;
+      font-style: normal;
+      line-height: 15px;
+      text-align: center;
+    }
+    #interaction-prompt .key[hidden] { display: none; }
 
     #instructions {
       position: absolute;
@@ -41,11 +121,12 @@
     }
     #instructions.hidden { display: none; }
 
-    /* Story lines: a quiet subtitle in the bottom-left corner that drifts in and fades away */
+    /* Story lines: a quiet subtitle in the bottom-left corner that drifts in and fades away,
+       sitting just above the left hand rather than over it */
     #story {
       position: absolute;
       left: 28px;
-      bottom: 28px;
+      bottom: max(28px, var(--hands-top));
       max-width: min(440px, calc(100vw - 56px));
       padding: 14px 20px 15px 18px;
       border-left: 2px solid rgba(255, 204, 102, 0.7);
@@ -75,11 +156,12 @@
 
     /* On narrow screens, sit above the volume control */
     @media (max-width: 640px) {
-      #story { left: 16px; right: 16px; bottom: 84px; max-width: none; font-size: 16px; }
+      #story { left: 16px; right: 16px; bottom: max(84px, var(--hands-top)); max-width: none; font-size: 16px; }
     }
 
     @media (prefers-reduced-motion: reduce) {
       #story { transform: none; filter: none; transition: opacity 0.4s ease; }
+      #interaction-prompt, #interaction-prompt.visible { transform: translate(-50%, 0); }
     }
 
     #fade-overlay {
@@ -114,6 +196,8 @@
   <input type="range" id="volume-slider" min="0" max="1" step="0.1" value="0.7">
 </div>
 <div id="instructions">Click to start<br>WASD / Arrow Keys to walk · Shift to hurry · Space to jump</div>
+<div id="crosshair" aria-hidden="true"></div>
+<div id="interaction-prompt"><span class="key">E</span><span class="label"></span></div>
 <div id="story"></div>
 <div id="fade-overlay"></div>
 <button id="restart-button">Experience Again</button>
