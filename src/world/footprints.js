@@ -58,7 +58,9 @@ export class Footprints {
         this.heightAt = heightAt;
         this.next = 0;
         this.time = { value: 0 };
+        this.strength = { value: strength }; // How dark, 0..1 (can change, e.g. with the light)
         const wind = { value: windDirection ?? new THREE.Vector2(1, 0) };
+        const printStrength = this.strength;
 
         // Flat on the ground, toes toward -Z
         const geometry = new THREE.PlaneGeometry(PRINT_SIZE.width, PRINT_SIZE.length).rotateX(-Math.PI / 2);
@@ -83,6 +85,7 @@ export class Footprints {
         material.onBeforeCompile = shader => {
             shader.uniforms.printTime = time;
             shader.uniforms.windDirection = wind;
+            shader.uniforms.printStrength = printStrength;
             if (hole) {
                 shader.uniforms.holeCenter = hole.center;
                 shader.uniforms.holeHalf = hole.half;
@@ -105,6 +108,7 @@ export class Footprints {
                     uniform vec2 holeCenter;
                     uniform float holeHalf;
                     uniform vec2 windDirection;
+                    uniform float printStrength;
                     varying float vFill;
                     varying vec2 vPrintPosition;
                     varying vec2 vPrintCenter;`)
@@ -116,7 +120,7 @@ export class Footprints {
                     float downwind = dot(vPrintPosition - vPrintCenter, windDirection) / 0.15; // -1 .. 1
                     float threshold = clamp(0.5 + 0.3 * downwind + 0.45 * (grain - 0.5), 0.02, 0.98);
                     float covered = max(smoothstep(threshold - 0.08, threshold + 0.08, vFill), smoothstep(0.85, 1.0, vFill));
-                    float printFade = (1.0 - covered) * ${strength.toFixed(2)};
+                    float printFade = (1.0 - covered) * printStrength;
                     diffuseColor.rgb = mix(vec3(1.0), diffuseColor.rgb, printFade); // White leaves the sand unchanged`);
         };
 
@@ -137,11 +141,12 @@ export class Footprints {
     }
 
     // x, z: where the body is; heading: travel direction angle (atan2(dx, dz)); foot: 1 right, -1 left
-    add({ x, z, heading, foot, lift = 0.02 }) {
+    // spacing: how far each foot lands from the centre line; length: 1, or more for a dragged step
+    add({ x, z, heading, foot, lift = 0.02, spacing = FOOT_SPACING, length = 1 }) {
         const hx = Math.sin(heading), hz = Math.cos(heading);
         // Each foot lands a little to its side of the centre line, turned out slightly
-        const px = x + -hz * foot * FOOT_SPACING;
-        const pz = z + hx * foot * FOOT_SPACING;
+        const px = x + -hz * foot * spacing;
+        const pz = z + hx * foot * spacing;
         const turnOut = foot * 0.12 + (Math.random() - 0.5) * 0.08;
 
         const e = 0.15;
@@ -155,7 +160,7 @@ export class Footprints {
         this.tilt.setFromUnitVectors(this.up, this.normal).multiply(this.yaw);
         this.position.set(px, this.heightAt(px, pz) + lift, pz);
         const size = 0.95 + Math.random() * 0.1;
-        this.scale.set(foot < 0 ? -size : size, 1, size); // Mirror the left foot
+        this.scale.set(foot < 0 ? -size : size, 1, size * length); // Mirror the left foot
 
         this.mesh.setMatrixAt(this.next, this.matrix.compose(this.position, this.tilt, this.scale));
         this.birth.setX(this.next, this.time.value);

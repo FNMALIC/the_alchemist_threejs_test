@@ -8,6 +8,10 @@
 //   first light        the melody turns to a warm major pentatonic; the drone gains a major third
 // Everything except the wind passes through the main mix, so it still fades into silence and
 // echo near the light.
+//
+// Also: places of silence (the music drops away and only the wind is left), the wind that
+// whistles on a crest and is muffled in a hollow, the low boom of a singing dune when you slide
+// down one, and once, far away at night, a jackal.
 
 // MIDI note numbers. Hijaz on D (D Eb F# G A Bb C), and D major pentatonic for the dawn.
 const HIJAZ = [62, 63, 66, 67, 69, 70, 72, 74, 75, 78];
@@ -104,8 +108,28 @@ export class JourneyMusic {
         this.windFilter.Q.value = 0.6;
         this.windGain = context.createGain();
         this.windGain.gain.value = 0;
-        wind.connect(this.windFilter).connect(this.windGain).connect(this.audio.effectsGain);
+        // Open on a crest, muffled in a hollow
+        this.windTone = context.createBiquadFilter();
+        this.windTone.type = 'lowpass';
+        this.windTone.frequency.value = 2000;
+        wind.connect(this.windFilter).connect(this.windTone).connect(this.windGain).connect(this.audio.effectsGain);
         wind.start();
+
+        // The whistle of wind over an edge: the same noise through a narrow band
+        const whistle = context.createBufferSource();
+        whistle.buffer = wind.buffer;
+        whistle.loop = true;
+        this.whistleFilter = context.createBiquadFilter();
+        this.whistleFilter.type = 'bandpass';
+        this.whistleFilter.Q.value = 14;
+        this.whistleFilter.frequency.value = 1100;
+        this.whistleGain = context.createGain();
+        this.whistleGain.gain.value = 0;
+        whistle.connect(this.whistleFilter).connect(this.whistleGain).connect(this.audio.effectsGain);
+        whistle.start(context.currentTime, 2.3); // Out of step with the wind itself
+
+        // A singing dune: a low hum (made when needed)
+        this.singing = null;
 
         // Drone: D2 and A2, two slightly detuned saws each, darkened by a low-pass filter
         this.droneFilter = context.createBiquadFilter();
@@ -221,10 +245,111 @@ export class JourneyMusic {
         }
     }
 
+    // A booming dune: avalanching sand makes the whole face hum, low (70-105 Hz) and steady,
+    // like a distant engine. level: 0 silent .. 1 full; pitch: Hz
+    sing(level, pitch) {
+        if (!this.started) return;
+        const context = this.context;
+        const now = context.currentTime;
+        if (!this.singing) {
+            if (level <= 0.01) return;
+            const gain = context.createGain();
+            gain.gain.value = 0;
+            const tone = context.createBiquadFilter();
+            tone.type = 'lowpass';
+            tone.frequency.value = 380;
+            tone.Q.value = 1.2;
+            // The grains do not move as one: a rough, quick flutter in the loudness
+            const flutter = context.createGain();
+            flutter.gain.value = 0.75;
+            const rough = context.createOscillator();
+            rough.frequency.value = 13;
+            const roughDepth = context.createGain();
+            roughDepth.gain.value = 0.25;
+            rough.connect(roughDepth).connect(flutter.gain);
+            rough.start();
+            const voices = [[1, 'sawtooth', 0.5], [1.007, 'sawtooth', 0.4], [2, 'triangle', 0.25], [0.5, 'sine', 0.35]].map(([ratio, type, level]) => {
+                const oscillator = context.createOscillator();
+                oscillator.type = type;
+                const voiceGain = context.createGain();
+                voiceGain.gain.value = level;
+                oscillator.connect(voiceGain).connect(tone);
+                oscillator.start();
+                return { oscillator, ratio };
+            });
+            tone.connect(flutter).connect(gain).connect(this.audio.effectsGain);
+            this.singing = { gain, voices };
+        }
+        this.singing.voices.forEach(({ oscillator, ratio }) => oscillator.frequency.setTargetAtTime(pitch * ratio, now, 0.3));
+        this.singing.gain.gain.setTargetAtTime(0.32 * level, now, level > 0.05 ? 0.4 : 1.2);
+    }
+
+    // Far away in the dark, a jackal: a few wailing howls rising over each other, then yips.
+    // pan: -1 left .. 1 right (where it is, from where you face)
+    jackal(pan) {
+        if (!this.started) return;
+        const context = this.context;
+        const start = context.currentTime + 0.1;
+
+        // Distance: quiet, dull, with a long echo off the dunes
+        const out = context.createGain();
+        out.gain.value = 0.05;
+        const far = context.createBiquadFilter();
+        far.type = 'lowpass';
+        far.frequency.value = 1900;
+        const panner = context.createStereoPanner();
+        panner.pan.value = pan;
+        const echo = context.createDelay(1);
+        echo.delayTime.value = 0.38;
+        const echoBack = context.createGain();
+        echoBack.gain.value = 0.35;
+        out.connect(far).connect(panner).connect(this.audio.effectsGain);
+        far.connect(echo).connect(echoBack).connect(echo);
+        echoBack.connect(panner);
+
+        const voice = (at, length, low, high) => {
+            const oscillator = context.createOscillator();
+            oscillator.type = 'sawtooth';
+            const throat = context.createBiquadFilter(); // Softens the saw into a voice
+            throat.type = 'bandpass';
+            throat.frequency.value = 1150;
+            throat.Q.value = 3;
+            const gain = context.createGain();
+            // Pitch: a rise, a wavering hold, and a fall, as a howl goes
+            const steps = 256;
+            const curve = new Float32Array(steps);
+            for (let i = 0; i < steps; i++) {
+                const t = i / (steps - 1);
+                const contour = t < 0.18 ? low + (high - low) * (t / 0.18) : high - (high - low) * 0.45 * Math.pow((t - 0.18) / 0.82, 1.6);
+                curve[i] = contour + Math.sin(t * length * 6.5 * Math.PI * 2) * 22;
+            }
+            oscillator.frequency.setValueCurveAtTime(curve, at, length);
+            gain.gain.setValueAtTime(0, at);
+            gain.gain.linearRampToValueAtTime(1, at + 0.15);
+            gain.gain.setValueAtTime(1, at + length - 0.4);
+            gain.gain.linearRampToValueAtTime(0, at + length);
+            oscillator.connect(throat).connect(gain).connect(out);
+            oscillator.start(at);
+            oscillator.stop(at + length + 0.05);
+        };
+        voice(start, 2.6, 480, 980);
+        voice(start + 0.7, 2.2, 520, 1130);
+        voice(start + 1.5, 2.4, 450, 900);
+        // Yips
+        let at = start + 3.6;
+        for (let i = 0; i < 7; i++) {
+            const length = 0.1 + Math.random() * 0.08;
+            voice(at, length, 900 + Math.random() * 150, 1250 + Math.random() * 200);
+            at += 0.16 + Math.random() * 0.25;
+        }
+    }
+
     // progress: 0..1 along the journey (distance walked); sunAltitude: degrees
     // storm: 0 calm .. 1 sandstorm (the wind roars and drowns the music)
     // wind: { calm, gust } from Wind (still air is near silent, a breeze rushes)
-    update(delta, { progress, sunAltitude, storm = 0, wind = { calm: 0.3, gust: 1 } }) {
+    // silence: 0 .. 1 in a place of silence (only the wind is left)
+    // exposure: -1 deep in a hollow .. 1 on a crest
+    update(delta, { progress, sunAltitude, storm = 0, wind = { calm: 0.3, gust: 1 }, silence = 0, exposure = 0 }) {
         if (!this.started) {
             if (!this.audio.started) return;
             this.start();
@@ -239,9 +364,15 @@ export class JourneyMusic {
         // The wind: the same one that moves the dust and the palms
         const gust = wind.gust;
         const breeze = Math.min(1.2, wind.calm * gust);
-        ease(this.windGain.gain, 0.05 + 0.35 * breeze + storm * (0.75 + 0.25 * gust), 0.3);
+        const open = Math.max(0, exposure), sheltered = Math.max(0, -exposure);
+        ease(this.windGain.gain, (0.05 + 0.35 * breeze) * (1 + 0.35 * open - 0.4 * sheltered) + storm * (0.75 + 0.25 * gust), 0.3);
         ease(this.windFilter.frequency, 280 + 600 * breeze + storm * 1400, 0.3);
-        const hush = 1 - 0.88 * storm; // Everything else is drowned by the storm
+        ease(this.windTone.frequency, 650 + 2600 * (1 - sheltered) + 2500 * open + storm * 3000, 0.6);
+        // On a crest, the wind sings over the edge
+        ease(this.whistleGain.gain, 0.5 * open * Math.max(0, breeze - 0.15) * (1 - storm), 0.5);
+        ease(this.whistleFilter.frequency, 950 + 500 * gust + 300 * Math.sin(this.time * 0.23), 0.4);
+        // Everything else is drowned by the storm, and falls away in a place of silence
+        const hush = (1 - 0.88 * storm) * (1 - silence);
 
         // The layers come in as the walk goes on
         this.audio.setTrackLevel?.((0.35 + 0.65 * smoothstep(0.1, 0.45, progress)) * hush);
@@ -253,7 +384,7 @@ export class JourneyMusic {
 
         // Melody phrases, closer together as the walk goes on and the light nears
         this.nextPhrase -= delta;
-        if (melody > 0.02 && storm < 0.3 && this.nextPhrase <= 0) {
+        if (melody > 0.02 && storm < 0.3 && silence < 0.3 && this.nextPhrase <= 0) {
             this.playPhrase();
             this.nextPhrase = (7 - 3.5 * progress) * (0.7 + Math.random() * 0.6);
         }

@@ -4,13 +4,27 @@
 // At each place, a scrap of a letter weighted with a stone. The letters are written to someone
 // they left behind, asleep under the old tree: you.
 //
+// Their steps tell how they felt: short and dragging where they were tired, long strides down the
+// dunes, a scuffle where they sat by the fire. Off their path: the hollow where they lay to look
+// at the stars (their feet toward a constellation that really is high that night), a tree drawn
+// in the sand and half erased, a white stone they carried from home and set down at the well.
+// And at the light itself, a shallow hole they dug, with nothing in it: the treasure was never
+// there. Their trail is faint at night; the low sun at dawn brings it out.
+//
 // The desert also remembers you (see memory.js): your last walk is still faintly in the sand,
 // and each time you have sat under the tree, a pebble lies beside their stones.
 import * as THREE from 'three';
+import { Horizon } from 'astronomy-engine';
 import { Footprints } from './footprints.js';
 import { createRock } from './props.js';
+import { OBSERVER, equatorialVector } from './astronomy.js';
+import constellationData from '../data/constellations.json';
 
 const STEP_LENGTH = 0.85;
+const TIRED = { from: -98, to: -126 }; // Between the well and the jar (z): the light never came closer
+
+// Constellations someone lying in the sand might watch, best known first
+const STARGAZING = ['Ori', 'UMa', 'Cyg', 'Leo', 'Sco', 'Gem', 'Cas', 'Tau', 'Lyr', 'Boo', 'Peg', 'Aql', 'Per', 'Aur', 'Sgr'];
 
 // Their way out: from the old tree, a little west of the straight line, past the campfire,
 // the well and the jar, to where the light is
@@ -46,10 +60,11 @@ export class Traces {
         this.heightAt = world.heightAt;
         // Old prints sit on whichever is higher: the true dune shape or the coarse mesh
         const groundAt = (x, z) => Math.max(this.heightAt(x, z), world.terrain.surfaceHeightAt(x, z));
+        this.groundAt = groundAt;
 
         this.trail = new Footprints(groundAt, null, { ageing: false, strength: 0.75, name: 'traveller' });
         world.scene.add(this.trail.mesh);
-        this.outward = this.layTrail(OUTWARD, 0.3);
+        this.outward = this.layTrail(OUTWARD, 0.3, 0, true);
         // Where the light was, their turn for home is clear; further on the wind has taken more
         this.homeward = this.layTrail(HOMEWARD, 0.4, 25);
 
@@ -62,6 +77,14 @@ export class Traces {
         this.note(well.x - 1.4, well.z + 0.4, -0.3);
         this.note(jar.x + 0.5, jar.z + 0.5, 1.1);
         this.note(turn.x, turn.z, 2.2);
+
+        // What else they left
+        this.scuffle(campfire.x + 0.2, campfire.z + 1.0); // Where they sat by the fire
+        const stargazing = this.stargazingHollow(8.5, -68, world.sky);
+        this.drawing(jar.x - 2.2, jar.z + 1.4, 0.5);
+        this.whiteStone(well.x + 1.35, well.z + 0.5);
+        this.dig(lightPosition.x + 0.4, lightPosition.z - 0.5);
+        this.places = { campfire, well, jar, turn, stargazing };
 
         // Under the old tree: a seat facing the desert, and their small stack of stones beside it
         const toLight = new THREE.Vector2(lightPosition.x - oldTree.x, lightPosition.z - oldTree.z).normalize();
@@ -122,23 +145,147 @@ export class Traces {
     }
 
     // Footprints along a smooth path through the given points; some are lost to the wind,
-    // except along the first `keepFirst` metres
-    layTrail(points, lostToWind, keepFirst = 0) {
+    // except along the first `keepFirst` metres. The steps follow the ground and the mood: long
+    // strides down a dune, short ones up it, and (outward, between the well and the jar) the
+    // short, dragging steps of someone tired.
+    layTrail(points, lostToWind, keepFirst = 0, outward = false) {
         const curve = new THREE.CatmullRomCurve3(points.map(([x, z]) => new THREE.Vector3(x, 0, z)));
         const length = curve.getLength();
-        const steps = Math.floor(length / STEP_LENGTH);
         const samples = [];
         let foot = 1;
-        for (let i = 0; i <= steps; i++) {
-            const t = i / steps;
+        for (let travelled = 0; travelled <= length;) {
+            const t = travelled / length;
             const point = curve.getPointAt(t);
             const tangent = curve.getTangentAt(t);
             samples.push({ x: point.x, z: point.z });
             foot = -foot;
-            if (i * STEP_LENGTH > keepFirst && Math.random() < lostToWind) continue;
-            this.trail.add({ x: point.x, z: point.z, heading: Math.atan2(tangent.x, tangent.z), foot, lift: 0.03 });
+
+            // Slope along the way: positive uphill
+            const slope = (this.heightAt(point.x + tangent.x * 0.6, point.z + tangent.z * 0.6) -
+                this.heightAt(point.x - tangent.x * 0.6, point.z - tangent.z * 0.6)) / 1.2;
+            let stride = STEP_LENGTH;
+            if (slope < -0.06) stride = THREE.MathUtils.lerp(STEP_LENGTH, 1.2, Math.min(1, (-slope - 0.06) / 0.25));
+            else if (slope > 0.06) stride = THREE.MathUtils.lerp(STEP_LENGTH, 0.58, Math.min(1, (slope - 0.06) / 0.25));
+            const tired = outward && point.z < TIRED.from && point.z > TIRED.to;
+            if (tired) stride = Math.min(stride, 0.6 + Math.random() * 0.06);
+
+            if (travelled <= keepFirst || Math.random() >= lostToWind) {
+                const heading = Math.atan2(tangent.x, tangent.z);
+                // Tired feet land closer together and drag their toes
+                this.trail.add({
+                    x: point.x, z: point.z, heading, foot, lift: 0.03,
+                    spacing: tired ? 0.07 : undefined, length: tired && Math.random() < 0.5 ? 1.35 : 1
+                });
+            }
+            travelled += stride;
         }
         return samples;
+    }
+
+    // Where they sat by the fire: prints every which way, as someone shifts, kneels, gets up
+    scuffle(x, z) {
+        for (let i = 0; i < 12; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const r = Math.random() * 0.9;
+            this.trail.add({
+                x: x + Math.cos(angle) * r, z: z + Math.sin(angle) * r,
+                heading: Math.random() * Math.PI * 2, foot: Math.random() < 0.5 ? 1 : -1, lift: 0.03
+            });
+        }
+        this.sandMark(createSittingTexture(), x, z, 0.7, 0.55, Math.random() * Math.PI);
+    }
+
+    // A body-shaped hollow, feet toward a constellation that is high in the sky that night
+    stargazingHollow(x, z, sky) {
+        const clock = sky.clock;
+        const date = new Date(clock.start + (clock.end - clock.start) * 0.15); // When you pass by
+        let watched = null;
+        for (const id of STARGAZING) {
+            const figure = constellationData.constellations.find(c => c.id === id);
+            if (!figure) continue;
+            // Its middle: the average of its stars' directions
+            const middle = new THREE.Vector3();
+            figure.lines.forEach(line => {
+                for (let i = 0; i < line.length; i += 2) middle.add(equatorialVector(line[i], line[i + 1]));
+            });
+            middle.normalize();
+            const ra = ((Math.atan2(middle.y, middle.x) * 12) / Math.PI + 24) % 24;
+            const dec = (Math.asin(middle.z) * 180) / Math.PI;
+            const { azimuth, altitude } = Horizon(date, OBSERVER, ra, dec);
+            if (altitude > 25 && altitude < 75) {
+                watched = { id, name: figure.name, azimuth, altitude };
+                break;
+            }
+        }
+        // Feet toward it, so lying here you would look straight at it
+        const toward = watched ? sky.frame.direction(watched.azimuth, 0) : new THREE.Vector3(0, 0, -1);
+        this.sandMark(createBodyTexture(), x, z, 0.75, 1.9, Math.atan2(toward.x, toward.z));
+        return { x, z, constellation: watched };
+    }
+
+    // A tree drawn with a finger in the sand, half taken by the wind
+    drawing(x, z, turn) {
+        this.sandMark(createDrawingTexture(), x, z, 1.3, 1.3, turn);
+    }
+
+    // A smooth white stone, nothing like the desert's: carried from somewhere else and set down
+    whiteStone(x, z) {
+        const stone = new THREE.Mesh(
+            new THREE.SphereGeometry(0.075, 20, 14).scale(1.25, 0.62, 0.95),
+            new THREE.MeshStandardMaterial({ color: 0xf1ede4, roughness: 0.32 })
+        );
+        stone.position.set(x, this.ground(x, z) + 0.025, z);
+        stone.rotation.y = 0.7;
+        stone.castShadow = true;
+        stone.receiveShadow = true;
+        this.world.add(stone);
+    }
+
+    // Under the light: a shallow hole dug in the sand, a heap of what came out, the stick that
+    // dug it. Nothing in it.
+    dig(x, z) {
+        const y = this.ground(x, z);
+        this.sandMark(createHoleTexture(), x, z, 0.8, 0.7, 0.3); // Its shadow, seen from further away
+        // In the sand itself (the detailed sand around the player), the hole and its heap
+        this.world.sandPatch.addPit(x, z, 0.36, 0.07, 0.4);
+        const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.024, 0.95, 6), charredWood.clone());
+        stick.material.color.setHex(0x6b5640);
+        stick.rotation.set(Math.PI / 2 - 0.08, 0, 1.1);
+        stick.position.set(x - 0.15, y + 0.035, z + 0.55);
+        stick.castShadow = true;
+        this.world.add(stick);
+    }
+
+    // A darkening mark lying on the sand (white leaves it unchanged), following the dunes
+    sandMark(texture, x, z, width, length, turn) {
+        const geometry = new THREE.PlaneGeometry(width, length, 8, 16).rotateX(-Math.PI / 2).rotateY(turn);
+        const positions = geometry.attributes.position;
+        for (let i = 0; i < positions.count; i++) {
+            const px = x + positions.getX(i), pz = z + positions.getZ(i);
+            positions.setXYZ(i, px, this.groundAt(px, pz) + 0.025, pz);
+        }
+        const mark = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({
+            map: texture,
+            blending: THREE.MultiplyBlending,
+            premultipliedAlpha: true,
+            transparent: true,
+            depthWrite: false,
+            polygonOffset: true,
+            polygonOffsetFactor: -4,
+            fog: false
+        }));
+        mark.renderOrder = 1;
+        this.world.scene.add(mark);
+        return mark;
+    }
+
+    // Their trail is faint at night and comes out at dawn, when the low sun rakes across it
+    update(sunAltitude) {
+        const smoothstep = THREE.MathUtils.smoothstep;
+        const raking = smoothstep(sunAltitude, -10, -2) * (1 - smoothstep(sunAltitude, 8, 16));
+        const strength = 0.4 + 0.55 * raking + 0.22 * smoothstep(sunAltitude, 8, 16);
+        this.trail.strength.value = strength;
+        if (this.pastTrail) this.pastTrail.strength.value = strength * 0.65;
     }
 
     // Distance from (x, z) to the nearest point of a trail
@@ -229,4 +376,141 @@ export class Traces {
         }
         return { x, z };
     }
+}
+
+// Canvas textures for marks in the sand: white is untouched sand, darker is a hollow or a line
+
+function sandCanvas(width, height) {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    context.fillStyle = '#fff';
+    context.fillRect(0, 0, width, height);
+    return { canvas, context };
+}
+
+// A soft dark blob: darkest in the middle, gone at the edge
+function blob(context, x, y, rx, ry, darkness) {
+    context.save();
+    context.translate(x, y);
+    context.scale(1, ry / rx);
+    const gradient = context.createRadialGradient(0, 0, 0, 0, 0, rx);
+    const shade = Math.round(255 * (1 - darkness));
+    gradient.addColorStop(0, `rgba(${shade}, ${shade - 8}, ${shade - 20}, 1)`);
+    gradient.addColorStop(0.6, `rgba(${shade}, ${shade - 8}, ${shade - 20}, 0.6)`);
+    gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    context.fillStyle = gradient;
+    context.beginPath();
+    context.arc(0, 0, rx, 0, Math.PI * 2);
+    context.fill();
+    context.restore();
+}
+
+function toTexture(canvas) {
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+}
+
+// Blur a canvas by drawing it small and back up again (works in every browser)
+function soften(canvas, factor) {
+    const small = document.createElement('canvas');
+    small.width = Math.max(1, Math.round(canvas.width / factor));
+    small.height = Math.max(1, Math.round(canvas.height / factor));
+    const smallContext = small.getContext('2d');
+    smallContext.imageSmoothingQuality = 'high';
+    smallContext.drawImage(canvas, 0, 0, small.width, small.height);
+    const context = canvas.getContext('2d');
+    context.imageSmoothingQuality = 'high';
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(small, 0, 0, canvas.width, canvas.height);
+}
+
+// Someone lay here on their back: one soft hollow in the shape of a body, head at the top,
+// arms a little out, deepest under the head, the shoulders and the heels
+function createBodyTexture() {
+    const { canvas, context } = sandCanvas(96, 256);
+    context.fillStyle = 'rgb(222, 212, 196)';
+    const shape = (draw) => { context.beginPath(); draw(); context.fill(); };
+    shape(() => context.ellipse(48, 24, 15, 17, 0, 0, Math.PI * 2)); // Head
+    shape(() => context.ellipse(48, 82, 24, 44, 0, 0, Math.PI * 2)); // Back and hips
+    shape(() => context.ellipse(19, 88, 7, 38, 0.12, 0, Math.PI * 2)); // Arms
+    shape(() => context.ellipse(77, 88, 7, 38, -0.12, 0, Math.PI * 2));
+    shape(() => context.ellipse(38, 180, 10, 58, 0.04, 0, Math.PI * 2)); // Legs
+    shape(() => context.ellipse(58, 180, 10, 58, -0.04, 0, Math.PI * 2));
+    context.globalCompositeOperation = 'multiply';
+    context.fillStyle = 'rgb(236, 228, 216)';
+    shape(() => context.ellipse(48, 22, 9, 10, 0, 0, Math.PI * 2)); // Pressed deeper
+    shape(() => context.ellipse(48, 62, 18, 16, 0, 0, Math.PI * 2));
+    shape(() => context.ellipse(37, 232, 7, 8, 0, 0, Math.PI * 2));
+    shape(() => context.ellipse(59, 232, 7, 8, 0, 0, Math.PI * 2));
+    soften(canvas, 8);
+    return toTexture(canvas);
+}
+
+// Where someone sat: a rounded hollow, deeper at the back
+function createSittingTexture() {
+    const { canvas, context } = sandCanvas(96, 96);
+    context.globalCompositeOperation = 'multiply';
+    blob(context, 48, 52, 34, 28, 0.16);
+    blob(context, 48, 60, 18, 14, 0.12);
+    return toTexture(canvas);
+}
+
+// A tree drawn with a finger: a trunk, a few branches, a round crown; a line of ground; and a
+// small circle above it. Then the wind takes parts of it.
+function createDrawingTexture() {
+    const size = 256;
+    const { canvas, context } = sandCanvas(size, size);
+    context.strokeStyle = 'rgb(200, 188, 170)'; // A groove: a shade darker than the sand around it
+    context.lineWidth = 6;
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+    const wobbly = (points) => {
+        context.beginPath();
+        points.forEach(([x, y], i) => {
+            const jx = x + (Math.random() - 0.5) * 3, jy = y + (Math.random() - 0.5) * 3;
+            if (i === 0) context.moveTo(jx, jy); else context.lineTo(jx, jy);
+        });
+        context.stroke();
+    };
+    wobbly([[40, 214], [90, 210], [140, 213], [216, 209]]); // The ground
+    wobbly([[124, 212], [126, 170], [122, 140], [128, 112]]); // The trunk
+    wobbly([[126, 150], [100, 124], [86, 104]]); // Branches
+    wobbly([[125, 138], [152, 116], [168, 98]]);
+    wobbly([[127, 118], [118, 96]]);
+    context.beginPath(); // The crown
+    context.ellipse(126, 92, 52, 34, 0, 0, Math.PI * 2);
+    context.stroke();
+    context.beginPath(); // Something small in the sky: the light, or the moon
+    context.arc(206, 46, 10, 0, Math.PI * 2);
+    context.stroke();
+
+    soften(canvas, 2.5);
+
+    // The wind fills it in: softly, more on the side it comes from (left)
+    for (let i = 0; i < 70; i++) {
+        const x = Math.pow(Math.random(), 1.6) * size;
+        const y = Math.random() * size;
+        const r = 6 + Math.random() * 22;
+        const gradient = context.createRadialGradient(x, y, 0, x, y, r);
+        gradient.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+        gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        context.fillStyle = gradient;
+        context.beginPath();
+        context.arc(x, y, r, 0, Math.PI * 2);
+        context.fill();
+    }
+    return toTexture(canvas);
+}
+
+// A shallow hole: dark at the bottom, its far wall in shadow
+function createHoleTexture() {
+    const { canvas, context } = sandCanvas(128, 112);
+    context.globalCompositeOperation = 'multiply';
+    blob(context, 64, 56, 54, 46, 0.2);
+    blob(context, 64, 50, 34, 26, 0.3);
+    blob(context, 64, 44, 18, 13, 0.25);
+    return toTexture(canvas);
 }

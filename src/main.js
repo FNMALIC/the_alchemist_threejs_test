@@ -11,6 +11,7 @@ import { createStages } from './stages.js';
 import { Moments } from './moments.js';
 import { Traces } from './world/traces.js';
 import { Constellations } from './world/constellations.js';
+import { Soundscape } from './soundscape.js';
 import { Storm } from './storm.js';
 import { loadMemory, saveMemory, PathRecorder } from './memory.js';
 import { Renderer, getQuality } from './render.js';
@@ -102,6 +103,7 @@ player.onLand = strength => {
 // Someone else walked here before you. And the desert remembers your earlier walks.
 const memory = loadMemory();
 const traces = new Traces(world, world.oldTree.position, ORB_POSITION, memory);
+const soundscape = new Soundscape(music, world, traces); // Silence, crests and hollows, singing dunes
 const pathRecorder = new PathRecorder();
 const storm = new Storm();
 
@@ -269,9 +271,16 @@ function animate() {
     interactionDebug?.update(delta);
     constellations.update(delta, camera, player.isLocked && !player.interaction.target);
 
-    // The music grows with the walk and turns toward morning at first light
+    traces.update(world.sky.sunAltitude); // Their trail comes out in the low sun
+
+    // The music grows with the walk and turns toward morning at first light; where you stand
+    // changes it (places of silence, crests, hollows)
+    soundscape.update(delta, {
+        eye: player.eye, slide: player.slide, sunAltitude: world.sky.sunAltitude, storm: stormIntensity, distanceWalked
+    });
     music.update(delta, {
-        progress: world.sky.dawnProgress, sunAltitude: world.sky.sunAltitude, storm: stormIntensity, wind: world.wind
+        progress: world.sky.dawnProgress, sunAltitude: world.sky.sunAltitude, storm: stormIntensity, wind: world.wind,
+        silence: soundscape.silence, exposure: soundscape.exposure
     });
 
     // Sliding down a dune: the feet cut a groove (the spray around them comes from the environment)
@@ -304,7 +313,7 @@ renderer.renderer.setAnimationLoop(animate);
 if (import.meta.env.DEV) {
     window.mirage = {
         scene, camera, player, orb, world, story, storyState, renderer: renderer.renderer,
-        music, audio, traces, debug, storm, constellations, rendering: renderer,
+        music, audio, traces, debug, storm, constellations, rendering: renderer, soundscape,
         interaction: player.interaction,
         environment,
         get testInteractables() { return testInteractables; }

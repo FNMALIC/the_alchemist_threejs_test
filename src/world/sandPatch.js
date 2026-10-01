@@ -64,6 +64,7 @@ export class SandPatch {
         this.erodeTimer = 0;
         this.erodedAt = 0;
         this.prints = []; // Recent prints, to re-press them when the patch moves back over them
+        this.pits = []; // Holes dug by someone else, long ago: the wind never fills them here
 
         this.heights = new Float32Array(VERTS * VERTS);
         this.spareHeights = new Float32Array(VERTS * VERTS);
@@ -310,6 +311,7 @@ export class SandPatch {
                 this.pressFoot(print, print.strength * Math.pow(0.5, (this.time - print.time) / ERODE_HALF_LIFE));
             }
         }
+        this.pits.forEach(pit => this.pressPit(pit));
         this.deformTexture.needsUpdate = true;
     }
 
@@ -350,6 +352,30 @@ export class SandPatch {
                 // Sand pushed aside: a low rim just outside the outline
                 const rim = smooth(1.75, 1.15, distance) * smooth(0.9, 1.1, distance);
                 const amount = (-dent * PRINT_DEPTH + rim * PRINT_RIM) * strength;
+                if (Math.abs(amount) > 0.0004) this.apply(tx, tz, amount);
+            }
+        }
+    }
+
+    // A shallow hole dug in the sand: a bowl with a low rim, and the dug sand heaped on one side
+    // (toward pileAngle). It stays: pressed whenever the patch covers it, again after the wind.
+    addPit(x, z, radius, depth, pileAngle) {
+        const pit = { x, z, radius, depth, pileX: x + Math.cos(pileAngle) * radius * 1.75, pileZ: z + Math.sin(pileAngle) * radius * 1.75 };
+        this.pits.push(pit);
+        this.pressPit(pit);
+        this.deformTexture.needsUpdate = true;
+    }
+
+    pressPit({ x, z, radius, depth, pileX, pileZ }) {
+        const reach = radius * 2.6;
+        for (let tx = Math.floor((x - reach) / TEXEL); tx <= Math.floor((x + reach) / TEXEL); tx++) {
+            for (let tz = Math.floor((z - reach) / TEXEL); tz <= Math.floor((z + reach) / TEXEL); tz++) {
+                const px = (tx + 0.5) * TEXEL, pz = (tz + 0.5) * TEXEL;
+                const r = Math.hypot(px - x, pz - z) / radius;
+                const bowl = r < 1 ? -depth * (1 - r * r) : 0;
+                const rim = 0.018 * Math.exp(-(((r - 1.2) / 0.22) ** 2));
+                const pile = 0.055 * Math.exp(-((Math.hypot(px - pileX, pz - pileZ) / (radius * 0.75)) ** 2));
+                const amount = bowl < 0 ? bowl : rim + pile;
                 if (Math.abs(amount) > 0.0004) this.apply(tx, tz, amount);
             }
         }
@@ -408,6 +434,10 @@ export class SandPatch {
                     bytes[i] = byte;
                     changed = true;
                 }
+            }
+            if (this.pits.length > 0) {
+                this.pits.forEach(pit => this.pressPit(pit));
+                changed = true;
             }
             if (changed) this.deformTexture.needsUpdate = true;
         }

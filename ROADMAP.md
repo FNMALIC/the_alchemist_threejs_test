@@ -192,6 +192,20 @@ The journey matters more than the destination. Very few words; the world tells t
 - [x] Moonlight by the moon's real brightness (its magnitude: a half moon gives about a tenth of a full moon's light), silver when high, warmer near the horizon; a bright moon turns the night sky deep blue; a moonless night is starlit, dim but readable
 - [x] The light's warm glow pools wide on the sand around it, stronger as you come close, and bounces back up from the sand, warming everything from below
 
+## Sound, without footsteps ✅
+- [x] Places of silence: by the campfire, at the well and at the stargazing hollow the music falls away completely; only the wind is left
+- [x] The wind is open and whistles over a crest, muffled down in a hollow
+- [x] Singing dunes: slide fast down a high dune face and some of them (always the same ones) start to boom, low (70-105 Hz) and rough, building and dying away
+- [x] Once, at full night, far off to one side: a jackal's howls and yips. Nothing ever appears
+
+## Traces of the other traveller ✅
+- [x] Their steps follow their mood and the ground: long strides down the dunes, short ones up them, and between the well and the jar the short, dragging, close-set steps of someone tired; a scuffle of prints where they sat by the fire
+- [x] The hollow where they lay to look at the stars, their feet toward a constellation that is really high in the sky that night (computed for the date)
+- [x] A tree drawn in the sand with a finger near the jar, half filled by the wind
+- [x] A smooth white stone at the well, nothing like the desert's rocks: carried from somewhere, set down (Santiago carried a white stone and a black one)
+- [x] Under the light, a shallow hole they dug, pressed into the sand itself, its heap beside it and the stick that dug it. Nothing in it
+- [x] Their trail is faint at night and comes out at dawn, when the low sun rakes across it
+
 ## Next ideas
 
 - [ ] Daylight details on the way back: things you passed in the dark look different in the morning

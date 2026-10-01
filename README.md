@@ -83,7 +83,9 @@ src/
     spatialGrid.js       Reactive things sorted into cells, so only nearby ones are looked at
   orb.js              The light: glowing orb, sound-reactive waves and particles; fades away like a mirage
   audio.js            Background track, proximity volume fade and reverb
-  music.js            Music that grows with the walk: wind, drone, plucked Hijaz melody, key change at first light
+  music.js            Music that grows with the walk: wind, drone, plucked Hijaz melody, key change at first light;
+                      the crest whistle, the singing dune and the jackal
+  soundscape.js       Places of silence, crests and hollows, singing dunes, the one jackal
   data/stars.json     5,070 naked-eye stars (generated, see below)
   world/
     world.js          Puts the world together: oasis, desert, lights, fog
@@ -98,7 +100,8 @@ src/
     constellations.js Rest your gaze on a constellation and its figure draws itself, then its name
     astronomy.js      Sky positions over Al-Fayoum, dawn times, and the walking-driven sky clock
     props.js          Old tree, palms, shrubs, rocks, grass, flowers (seeded, for the endless desert)
-    traces.js         The other traveller: their trail, campfire, well, jar, letters, stones; your past walk
+    traces.js         The other traveller: their trail (and their mood in it), campfire, well, jar, letters,
+                      the hollow where they watched the stars, a drawing, a white stone, the hole under the light
     dust.js           Sand drifting on the wind
     sandPatch.js      Detailed sand around the player: footprints and slide grooves pressed in as real dents, slowly filled by the wind
     footprints.js     The footprint trail further away (fades after a few minutes)
