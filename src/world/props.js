@@ -259,6 +259,7 @@ export function createFlower(x, z, heightAt) {
         petal.position.set(Math.cos(angle) * (petalLength / 2), stemHeight, Math.sin(angle) * (petalLength / 2));
         petal.rotation.x = -Math.PI / 2;
         petal.rotation.z = angle;
+        petal.userData.bloom = { angle, radius: petalLength / 2 }; // Closes at night (see World.bloom)
         flower.add(petal);
     }
 

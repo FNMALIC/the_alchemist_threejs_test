@@ -278,69 +278,119 @@ export class JourneyMusic {
                 return { oscillator, ratio };
             });
             tone.connect(flutter).connect(gain).connect(this.audio.effectsGain);
+            // The avalanche itself: a hiss of sliding sand, and a rumble under the hum
+            const noise = context.createBuffer(1, context.sampleRate * 2, context.sampleRate);
+            const data = noise.getChannelData(0);
+            for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+            [['bandpass', 1400, 0.7, 0.35], ['lowpass', 110, 0.8, 0.9]].forEach(([type, frequency, q, level]) => {
+                const source = context.createBufferSource();
+                source.buffer = noise;
+                source.loop = true;
+                const filter = context.createBiquadFilter();
+                filter.type = type;
+                filter.frequency.value = frequency;
+                filter.Q.value = q;
+                const layer = context.createGain();
+                layer.gain.value = level;
+                source.connect(filter).connect(layer).connect(gain);
+                source.start();
+            });
             this.singing = { gain, voices };
         }
-        this.singing.voices.forEach(({ oscillator, ratio }) => oscillator.frequency.setTargetAtTime(pitch * ratio, now, 0.3));
+        // The pitch drifts a little as the avalanche grows and slows
+        const drift = 1 + 0.02 * Math.sin(now * 0.9) + 0.01 * Math.sin(now * 2.3);
+        this.singing.voices.forEach(({ oscillator, ratio }) => oscillator.frequency.setTargetAtTime(pitch * ratio * drift, now, 0.3));
         this.singing.gain.gain.setTargetAtTime(0.32 * level, now, level > 0.05 ? 0.4 : 1.2);
     }
 
-    // Far away in the dark, a jackal: a few wailing howls rising over each other, then yips.
-    // pan: -1 left .. 1 right (where it is, from where you face)
+    // Far away in the dark, a few jackals: wailing howls rising over each other, breaking and
+    // wavering, then a scatter of yips. A howl is nearly a pure tone (a strong fundamental, a few
+    // soft harmonics) with breath in it. pan: -1 left .. 1 right (where they are)
     jackal(pan) {
         if (!this.started) return;
         const context = this.context;
         const start = context.currentTime + 0.1;
 
-        // Distance: quiet, dull, with a long echo off the dunes
+        // Distance: quiet and dull, two echoes off the dunes
         const out = context.createGain();
-        out.gain.value = 0.05;
+        out.gain.value = 0.045;
         const far = context.createBiquadFilter();
         far.type = 'lowpass';
-        far.frequency.value = 1900;
+        far.frequency.value = 1700;
         const panner = context.createStereoPanner();
         panner.pan.value = pan;
-        const echo = context.createDelay(1);
-        echo.delayTime.value = 0.38;
-        const echoBack = context.createGain();
-        echoBack.gain.value = 0.35;
         out.connect(far).connect(panner).connect(this.audio.effectsGain);
-        far.connect(echo).connect(echoBack).connect(echo);
-        echoBack.connect(panner);
+        [[0.31, 0.32, -0.3], [0.67, 0.18, 0.2]].forEach(([delay, level, shift]) => {
+            const echo = context.createDelay(1);
+            echo.delayTime.value = delay;
+            const echoLevel = context.createGain();
+            echoLevel.gain.value = level;
+            const echoTone = context.createBiquadFilter();
+            echoTone.type = 'lowpass';
+            echoTone.frequency.value = 1100;
+            const echoPan = context.createStereoPanner();
+            echoPan.pan.value = Math.max(-1, Math.min(1, pan + shift));
+            far.connect(echo).connect(echoTone).connect(echoLevel).connect(echoPan).connect(this.audio.effectsGain);
+        });
 
-        const voice = (at, length, low, high) => {
-            const oscillator = context.createOscillator();
-            oscillator.type = 'sawtooth';
-            const throat = context.createBiquadFilter(); // Softens the saw into a voice
-            throat.type = 'bandpass';
-            throat.frequency.value = 1150;
-            throat.Q.value = 3;
-            const gain = context.createGain();
-            // Pitch: a rise, a wavering hold, and a fall, as a howl goes
-            const steps = 256;
-            const curve = new Float32Array(steps);
+        // Breath: soft noise, shaped like a throat
+        const noise = context.createBuffer(1, context.sampleRate, context.sampleRate);
+        const noiseData = noise.getChannelData(0);
+        for (let i = 0; i < noiseData.length; i++) noiseData[i] = Math.random() * 2 - 1;
+
+        // One voice: its pitch rises, holds wavering (and now and then breaks upward), then falls
+        const voice = (at, length, low, high, loudness = 1) => {
+            const steps = 400;
+            const contour = new Float32Array(steps);
+            let wobble = 0;
+            const breakAt = Math.random() < 0.6 ? 0.35 + Math.random() * 0.3 : 2; // A break in the voice
             for (let i = 0; i < steps; i++) {
                 const t = i / (steps - 1);
-                const contour = t < 0.18 ? low + (high - low) * (t / 0.18) : high - (high - low) * 0.45 * Math.pow((t - 0.18) / 0.82, 1.6);
-                curve[i] = contour + Math.sin(t * length * 6.5 * Math.PI * 2) * 22;
+                let f = t < 0.15
+                    ? low + (high - low) * Math.sin((t / 0.15) * Math.PI / 2)
+                    : high - (high - low) * 0.5 * Math.pow((t - 0.15) / 0.85, 1.8);
+                if (t > breakAt && t < breakAt + 0.06) f *= 1.18; // It cracks up and comes back
+                wobble += (Math.random() - 0.5) * 0.35; // Irregular, not a steady vibrato
+                wobble *= 0.93;
+                contour[i] = f * (1 + 0.025 * Math.sin(t * length * 7 * Math.PI * 2) + 0.012 * wobble);
             }
-            oscillator.frequency.setValueCurveAtTime(curve, at, length);
+            const gain = context.createGain();
             gain.gain.setValueAtTime(0, at);
-            gain.gain.linearRampToValueAtTime(1, at + 0.15);
-            gain.gain.setValueAtTime(1, at + length - 0.4);
+            gain.gain.linearRampToValueAtTime(loudness, at + 0.12);
+            gain.gain.setValueAtTime(loudness * 0.9, at + length * 0.7);
             gain.gain.linearRampToValueAtTime(0, at + length);
-            oscillator.connect(throat).connect(gain).connect(out);
-            oscillator.start(at);
-            oscillator.stop(at + length + 0.05);
+            gain.connect(out);
+            [[1, 1], [2, 0.28], [3, 0.1]].forEach(([harmonic, level]) => {
+                const oscillator = context.createOscillator();
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueCurveAtTime(contour.map(f => f * harmonic), at, length);
+                const partial = context.createGain();
+                partial.gain.value = level;
+                oscillator.connect(partial).connect(gain);
+                oscillator.start(at);
+                oscillator.stop(at + length + 0.05);
+            });
+            const breath = context.createBufferSource();
+            breath.buffer = noise;
+            const throat = context.createBiquadFilter();
+            throat.type = 'bandpass';
+            throat.frequency.value = high * 1.5;
+            throat.Q.value = 2;
+            const breathLevel = context.createGain();
+            breathLevel.gain.value = 0.12;
+            breath.connect(throat).connect(breathLevel).connect(gain);
+            breath.start(at, Math.random() * 0.4, length);
         };
-        voice(start, 2.6, 480, 980);
-        voice(start + 0.7, 2.2, 520, 1130);
-        voice(start + 1.5, 2.4, 450, 900);
-        // Yips
-        let at = start + 3.6;
-        for (let i = 0; i < 7; i++) {
-            const length = 0.1 + Math.random() * 0.08;
-            voice(at, length, 900 + Math.random() * 150, 1250 + Math.random() * 200);
-            at += 0.16 + Math.random() * 0.25;
+        voice(start, 2.9, 520, 1050);
+        voice(start + 0.6, 2.5, 600, 1240, 0.8);
+        voice(start + 1.3, 2.7, 480, 960, 0.9);
+        voice(start + 1.9, 2.2, 650, 1350, 0.6);
+        // Yips: quick rising barks, ragged in time
+        let at = start + 4.3;
+        for (let i = 0; i < 9; i++) {
+            const length = 0.09 + Math.random() * 0.1;
+            voice(at, length, 800 + Math.random() * 200, 1250 + Math.random() * 300, 0.6 + Math.random() * 0.4);
+            at += 0.12 + Math.random() * 0.3;
         }
     }
 

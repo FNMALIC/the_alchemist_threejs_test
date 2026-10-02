@@ -165,7 +165,7 @@ export class Movement {
         const before = this.stepStart.copy(position);
 
         // Near something that matters, the feet slow on their own
-        const targetSpeed = (moving.hurry ? HURRY_SPEED : WALK_SPEED) * (1 - 0.45 * this.attention);
+        const targetSpeed = (moving.hurry ? HURRY_SPEED : WALK_SPEED) * (1 - 0.3 * this.attention);
         const acceleration = targetSpeed * DAMPING;
 
         velocity.x -= velocity.x * DAMPING * delta;
@@ -217,10 +217,10 @@ export class Movement {
             // up, careful going down
             const stairs = this.stairsAlong(before.x, before.z, stepX / stepLength, stepZ / stepLength);
             if (stairs > 0) {
-                speed = 0.6;
+                speed = 0.7;
                 this.effort = Math.max(this.effort, 0.75);
             } else if (stairs < 0) {
-                speed = 0.75;
+                speed = 0.8;
             }
             speed *= 1 - 0.45 * this.storm; // Leaning into the wind
             if (this.isUnderWater(position.x, position.z)) speed *= WADING_SPEED;

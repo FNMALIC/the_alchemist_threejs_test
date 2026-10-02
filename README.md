@@ -32,7 +32,8 @@ Headphones recommended.
 
 **On a phone or tablet:** tap to start, hold the left side of the screen to walk (slide your thumb
 up to hurry, down to step back, sideways to step aside), drag on the right side to look around,
-double-tap the right side to jump, and tap "E — sit" or a prompt when it appears.
+double-tap the right side to jump, and tap "E — sit" or a prompt when it appears. Before starting,
+"Look by turning the phone" lets you look around by turning it (on top of dragging).
 
 **Weaker device?** Add `?quality=low` to the URL to turn off bloom and shadows.
 
@@ -104,6 +105,7 @@ src/
     wind.js           One wind for everything: still at night, a breeze before dawn, still at sunrise
     sandWisps.js      Sand blowing off the high dune crests when the wind can lift it
     farAway.js        For those who walk the wrong way: a compass in the sand, and a pyramid to climb
+    farDunes.js       The same dunes, coarsely, out to the horizon (seen from high up)
     constellations.js Rest your gaze on a constellation and its figure draws itself, then its name
     astronomy.js      Sky positions over Al-Fayoum, dawn times, and the walking-driven sky clock
     props.js          Old tree, palms, shrubs, rocks, grass, flowers (seeded, for the endless desert)

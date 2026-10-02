@@ -54,6 +54,7 @@ export function createStages(state) {
         },
 
         morning: {
+            enter: () => traces.morningTracks(), // The desert was busy in the night
             update: () => {
                 const nearSeat = state.distanceToSeat < SEAT_DISTANCE;
                 ui.hint.classList.toggle('visible', nearSeat);

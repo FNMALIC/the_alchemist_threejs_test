@@ -214,11 +214,25 @@ if (player.touch) {
     ui.instructions.innerHTML = 'Tap to start<br>Hold the left side to walk (slide up to hurry) · Drag the right side to look';
 }
 
+// On a phone: look by turning it, if you like (iPhones ask permission, from this tap)
+const tiltToggle = document.getElementById('tilt-toggle');
+tiltToggle.addEventListener('click', async () => {
+    const touch = player.touchControls;
+    if (!touch) return;
+    if (touch.tiltOn) touch.disableTilt();
+    else if (!(await touch.enableTilt())) {
+        tiltToggle.textContent = 'Turning the phone is not available here';
+        return;
+    }
+    tiltToggle.classList.toggle('on', touch.tiltOn);
+    tiltToggle.textContent = `Look by turning the phone: ${touch.tiltOn ? 'on' : 'off'}`;
+});
+
 // Click (or tap) to start: lock the pointer and start audio (browsers require a user gesture)
 let wakeLock = null;
 document.addEventListener('click', event => {
     // Let the UI controls be used without grabbing the mouse
-    if (event.target.closest('#audio-controls, #restart-button')) return;
+    if (event.target.closest('#audio-controls, #restart-button, #tilt-toggle')) return;
 
     if (!player.isLocked) {
         player.lock();
@@ -318,7 +332,7 @@ function animate() {
     // Near the traveller's things, the walk slows on its own, as if paying attention
     let nearest = Infinity;
     for (const mark of traces.landmarks) nearest = Math.min(nearest, Math.hypot(player.eye.x - mark.x, player.eye.z - mark.z));
-    player.movement.attention = 1 - THREE.MathUtils.smoothstep(nearest, 2, 8);
+    player.movement.attention = 1 - THREE.MathUtils.smoothstep(nearest, 1.5, 6);
     music.update(delta, {
         progress: world.sky.dawnProgress, sunAltitude: world.sky.sunAltitude, storm: stormIntensity, wind: world.wind,
         silence: soundscape.silence, exposure: soundscape.exposure

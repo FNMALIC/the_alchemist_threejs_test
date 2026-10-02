@@ -217,9 +217,15 @@ The journey matters more than the destination. Very few words; the world tells t
 - [x] Far beyond, more than a kilometre out, a pyramid the size of the Great Pyramid, its casing gone: climb its courses step by step to the flat top (and sit there). It shows through the haze from the compass; the haze is thinner high up, and a plain of sand reaches to the horizon below
 - [x] After sunrise the morning goes on wherever you walk, not only on the way home
 
+## Tuning ✅
+- [x] From high up, the dunes carry on to the horizon (a coarse copy of the same dunes, out to 2.5 km)
+- [x] Phones: "Look by turning the phone" (gyroscope), on top of dragging
+- [x] The jackal: near-pure howling voices with breath, wavering and breaking, four of them, two echoes; the singing dune: the hiss of sliding sand and a rumble under the boom, its pitch drifting
+- [x] Pacing: the walk slows a little less near their traces (30%, within 6 m); the pyramid climbs a little faster
+
 ## Next ideas
 
-- [ ] Daylight details on the way back: things you passed in the dark look different in the morning
+- [x] Daylight details on the way back: in the morning, fresh tracks cross places you passed in the dark (a fox by the fire and the well, beetles by the jar and under the tree), and the oasis flowers, closed at night, open in the sun
 - [ ] Morning sounds at the oasis (birds, water)
 
 ## Polish

@@ -218,6 +218,25 @@
       background: rgba(10, 10, 18, 0.35);
     }
 
+    /* On a phone, before starting: look by turning the phone (off by default) */
+    #tilt-toggle {
+      display: none;
+      position: absolute;
+      left: 50%;
+      bottom: 28px;
+      transform: translateX(-50%);
+      padding: 10px 18px;
+      border: 1px solid rgba(255, 226, 176, 0.5);
+      border-radius: 20px;
+      background: rgba(10, 10, 18, 0.45);
+      color: rgba(255, 250, 240, 0.9);
+      font-family: Georgia, 'Times New Roman', serif;
+      font-size: 15px;
+      font-style: italic;
+    }
+    body.touch:not(.locked) #tilt-toggle { display: block; }
+    #tilt-toggle.on { border-color: rgba(255, 204, 102, 0.95); color: #ffcc66; }
+
     /* Where the walking thumb is: a faint ring */
     .touch-ring {
       position: absolute;
@@ -270,6 +289,7 @@
 <div id="constellation" aria-live="polite"><span class="name"></span><span class="meaning"></span></div>
 <div id="hint">E — sit</div>
 <div id="pause-hint"></div>
+<button id="tilt-toggle" type="button">Look by turning the phone: off</button>
 <div id="fade-overlay"></div>
 <button id="restart-button">Walk again</button>
 <script type="module" src="./src/main.js"></script>

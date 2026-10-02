@@ -296,6 +296,33 @@ export class Traces {
         return mark;
     }
 
+    // Morning: while you walked in the dark, the desert was busy. A fox crossed their trail by the
+    // fire and near the well; beetles wandered by the jar and under the tree. Fresh tracks, there
+    // only in the morning, across places you passed at night.
+    morningTracks() {
+        if (this.tracksLaid) return;
+        this.tracksLaid = true;
+        const { campfire, well, jar } = this.places;
+        const fox = createFoxTexture();
+        const beetle = createBeetleTexture();
+        this.track(fox, [[campfire.x - 16, campfire.z + 7], [campfire.x - 4, campfire.z + 3.5], [campfire.x + 3, campfire.z - 2.5], [campfire.x + 16, campfire.z - 5]], 0.3);
+        this.track(fox, [[well.x + 12, well.z + 10], [well.x + 4, well.z + 3.5], [well.x - 3, well.z - 4], [well.x - 9, well.z - 15]], 0.3);
+        this.track(beetle, [[jar.x - 1, jar.z + 3], [jar.x + 0.5, jar.z + 1.2], [jar.x - 0.4, jar.z - 1], [jar.x + 1.6, jar.z - 2.6]], 0.16);
+        this.track(beetle, [[this.cairn.x - 2.2, this.cairn.z + 1.6], [this.cairn.x - 0.8, this.cairn.z + 0.9], [this.cairn.x - 0.3, this.cairn.z - 0.6], [this.cairn.x + 1.2, this.cairn.z - 1.8]], 0.16);
+    }
+
+    // A line of tracks along a smooth path through points [[x, z], ...]: one mark per 2 m piece
+    track(texture, points, width) {
+        const curve = new THREE.CatmullRomCurve3(points.map(([x, z]) => new THREE.Vector3(x, 0, z)));
+        const pieces = Math.max(1, Math.round(curve.getLength() / 2));
+        for (let i = 0; i < pieces; i++) {
+            const a = curve.getPointAt(i / pieces), b = curve.getPointAt((i + 1) / pieces);
+            const length = Math.hypot(b.x - a.x, b.z - a.z);
+            // The mark's length runs along -z before turning: point it from a to b
+            this.sandMark(texture, (a.x + b.x) / 2, (a.z + b.z) / 2, width, length * 1.02, Math.atan2(-(b.x - a.x), -(b.z - a.z)));
+        }
+    }
+
     // Their trail is faint at night and comes out at dawn, when the low sun rakes across it
     update(sunAltitude) {
         const smoothstep = THREE.MathUtils.smoothstep;
@@ -542,5 +569,30 @@ function createHoleTexture() {
     blob(context, 64, 56, 54, 46, 0.2);
     blob(context, 64, 50, 34, 26, 0.3);
     blob(context, 64, 44, 18, 13, 0.25);
+    return toTexture(canvas);
+}
+
+// A fox trotting: small oval pads, one in front of the other, every 30 cm or so (a 2 m piece)
+function createFoxTexture() {
+    const { canvas, context } = sandCanvas(48, 512);
+    context.globalCompositeOperation = 'multiply';
+    for (let i = 0; i < 7; i++) {
+        const y = 20 + i * 73 + (Math.random() - 0.5) * 6;
+        const x = 24 + (i % 2 ? 5 : -5) + (Math.random() - 0.5) * 3;
+        blob(context, x, y + 5, 8, 9, 0.38); // The pad
+        [[-6.5, -7], [-2.5, -11], [2.5, -11], [6.5, -7]].forEach(([dx, dy]) => blob(context, x + dx, y + dy, 3, 3.4, 0.34)); // Toes
+    }
+    return toTexture(canvas);
+}
+
+// A beetle: two fine dotted lines, side by side, wandering a little
+function createBeetleTexture() {
+    const { canvas, context } = sandCanvas(32, 256);
+    context.globalCompositeOperation = 'multiply';
+    for (let y = 4; y < 256; y += 5) {
+        const sway = Math.sin(y * 0.05) * 3;
+        blob(context, 11 + sway, y, 1.9, 1.9, 0.3);
+        blob(context, 21 + sway, y + 2.5, 1.9, 1.9, 0.3);
+    }
     return toTexture(canvas);
 }

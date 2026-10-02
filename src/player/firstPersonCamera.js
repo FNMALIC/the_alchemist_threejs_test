@@ -40,6 +40,15 @@ export class FirstPersonCamera {
         this.pitch = pitch;
     }
 
+    // Turn by (yaw, pitch) radians, e.g. from turning the phone
+    turn(yaw, pitch) {
+        const next = clampPitch(this.pitch + pitch);
+        this.turned.x += yaw;
+        this.turned.y += next - this.pitch;
+        this.yaw = THREE.MathUtils.euclideanModulo(this.yaw + yaw + Math.PI, Math.PI * 2) - Math.PI;
+        this.pitch = next;
+    }
+
     // Turn a little of the way toward (yaw, pitch); amount 0..1
     turnToward(yaw, pitch, amount) {
         const dYaw = THREE.MathUtils.euclideanModulo(yaw - this.yaw + Math.PI, Math.PI * 2) - Math.PI;

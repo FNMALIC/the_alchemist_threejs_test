@@ -10,6 +10,7 @@ import { DesertChunks, CHUNK_SIZE, KNOWN_CHUNKS } from './desertChunks.js';
 import { Wind } from './wind.js';
 import { SandWisps } from './sandWisps.js';
 import { FarAway, farPlaces, pyramidHeightAt, PYRAMID } from './farAway.js';
+import { FarDunes } from './farDunes.js';
 import {
     createOldTree, createPalm, createShrub, createRock, createGrassPatch, createFlower, swayGrass
 } from './props.js';
@@ -105,16 +106,10 @@ export class World {
         this.far.compass = { x: best.x, z: best.z };
         this.reserved[1] = { ...this.far.compass, radius: 4 };
         this.farAway = new FarAway(this, this.far);
-        // Beyond the dunes that are drawn, a plain of sand out to the horizon: hidden under the
-        // dunes from the ground, it is what you see far below from high up (the pyramid's top)
-        const { trough, crest } = this.terrain.sandColors;
-        this.farGround = new THREE.Mesh(
-            new THREE.CircleGeometry(4000, 48).rotateX(-Math.PI / 2),
-            new THREE.MeshStandardMaterial({ color: trough.clone().lerp(crest, 0.3), roughness: 1 })
-        );
-        this.farGround.position.y = -3.5;
-        this.farGround.receiveShadow = false;
-        scene.add(this.farGround);
+        // Beyond the dunes that are drawn in detail, the same dunes coarsely, out to the horizon:
+        // hidden from the ground, it is what you see far below from high up (the pyramid's top)
+        this.farDunes = new FarDunes(this.terrain);
+        scene.add(this.farDunes.mesh);
         this.dust = new Dust();
         scene.add(this.dust.points);
         this.wisps = new SandWisps(this.heightAt);
@@ -280,8 +275,8 @@ export class World {
         this.scene.fog.density = THREE.MathUtils.lerp(
             THREE.MathUtils.lerp(FOG_DENSITY_START, FOG_DENSITY_END, this.sky.dawnProgress), STORM_FOG_DENSITY, storm
         ) * thinning;
-        this.farGround.position.x = camera.position.x;
-        this.farGround.position.z = camera.position.z;
+        this.farDunes.update(camera.position.x, camera.position.z);
+        this.bloom(THREE.MathUtils.smoothstep(this.sky.sunAltitude, -4, 6));
         const wind = this.wind;
         wind.update(delta, this.sky.sunAltitude, storm);
         this.dust.update(delta, elapsed, camera, storm, wind);
@@ -317,6 +312,23 @@ export class World {
         const towardSun = Math.max(0, look.dot(this.sky.sunDirection));
         const towardMoon = Math.max(0, look.dot(this.sky.moonDirection));
         return 2.5 * Math.pow(towardSun, 3) * Math.min(1, sun.intensity) + 1.5 * Math.pow(towardMoon, 3) * moon.intensity;
+    }
+
+    // The oasis flowers close at night and open in the sun: open 0 (a bud) .. 1
+    bloom(open) {
+        if (this.bloomed !== undefined && Math.abs(open - this.bloomed) < 0.005) return;
+        this.bloomed = open;
+        for (const { object, kind } of this.vegetation) {
+            if (kind !== 'flower') continue;
+            object.traverse(part => {
+                const bloom = part.userData.bloom;
+                if (!bloom) return;
+                const radius = bloom.radius * (0.35 + 0.65 * open);
+                part.position.x = Math.cos(bloom.angle) * radius;
+                part.position.z = Math.sin(bloom.angle) * radius;
+                part.scale.setScalar(0.45 + 0.55 * open);
+            });
+        }
     }
 
     // How lit the sand is, 0..1 (for things drawn unlit, like blowing sand)
