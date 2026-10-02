@@ -194,7 +194,7 @@
     #constellation .meaning:empty { display: none; }
 
     /* A quiet prompt, e.g. "E — sit" under the old tree */
-    #hint, #pause-hint {
+    #hint, #pause-hint, #read-hint {
       position: absolute;
       left: 50%;
       bottom: 150px; /* Above the letters in the corner */
@@ -209,9 +209,9 @@
       opacity: 0;
       transition: opacity 1.2s ease, transform 1.2s ease;
     }
-    #hint.visible, #pause-hint.visible { opacity: 1; transform: translate(-50%, 0); }
+    #hint.visible, #pause-hint.visible, #read-hint.visible { opacity: 1; transform: translate(-50%, 0); }
     /* On a phone the quiet prompts are what you tap */
-    body.touch #hint.visible, body.touch #pause-hint.visible, body.touch #interaction-prompt.visible {
+    body.touch #hint.visible, body.touch #pause-hint.visible, body.touch #read-hint.visible, body.touch #interaction-prompt.visible {
       pointer-events: auto;
       padding: 10px 18px;
       border-radius: 18px;
@@ -354,6 +354,45 @@
       cursor: pointer;
     }
     #leave-ok { background: rgba(59, 47, 34, 0.08) !important; }
+
+    /* Reading what was left: picked up from the sand, put back after */
+    #read-hint { bottom: 190px; }
+    #reading {
+      display: none;
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: min(440px, calc(100vw - 32px));
+      max-height: calc(100vh - 40px);
+      max-height: calc(100dvh - 40px);
+      overflow-y: auto;
+      box-sizing: border-box;
+      padding: 20px 22px 16px;
+      border-radius: 4px;
+      background: rgba(238, 228, 206, 0.96);
+      color: #3b2f22;
+      font-family: Georgia, 'Times New Roman', serif;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+      cursor: pointer;
+    }
+    #reading.visible { display: block; }
+    #reading-text { margin: 0; font-size: 17px; font-style: italic; line-height: 1.5; white-space: pre-wrap; overflow-wrap: break-word; }
+    #reading-text[hidden] { display: none; }
+    #reading-picture { display: block; width: 100%; max-height: 60vh; object-fit: contain; margin-top: 12px; border: 8px solid #f2eee4; box-sizing: border-box; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); }
+    #reading-picture[hidden] { display: none; }
+    #reading-text[hidden] + #reading-picture { margin-top: 0; }
+    #reading-close {
+      display: block;
+      margin: 14px 0 0 auto;
+      padding: 7px 14px;
+      border: 1px solid rgba(59, 47, 34, 0.35);
+      border-radius: 3px;
+      background: transparent;
+      color: #3b2f22;
+      font: italic 15px Georgia, 'Times New Roman', serif;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -368,6 +407,12 @@
 <div id="constellation" aria-live="polite"><span class="name"></span><span class="meaning"></span></div>
 <div id="hint">E — sit</div>
 <div id="pause-hint"></div>
+<div id="read-hint"></div>
+<div id="reading" role="dialog" aria-label="Something left here">
+  <p id="reading-text"></p>
+  <img id="reading-picture" alt="A picture left here" hidden>
+  <button id="reading-close" type="button">Put it back</button>
+</div>
 <button id="tilt-toggle" type="button">Look by turning the phone: off</button>
 <div id="fade-overlay"></div>
 <button id="restart-button">Walk again</button>

@@ -33,7 +33,9 @@ Headphones recommended.
 **Leaving something for the next traveller:** press N (or tap "Leave something" on a phone) to leave
 a few lines and, if you like, a picture, right where you stand (up to three). When you stop (Esc)
 or at the end, "Share your walk" makes a link. Whoever opens it walks the same desert and finds your
-footprints, your notes under stones and your pictures in the sand.
+footprints, your notes under stones and your pictures in the sand. Near one, "E — read" (a tappable
+"Read" on a phone) picks it up; E again, "Put it back", a tap on it, or simply walking on puts it back.
+Near a note, E only ever reads it (it never sits you down).
 
 Short links (`/#w=k7f2a9qx`) need the project's Redis database (Vercel → Storage → Redis, connected to
 the project, which sets `REDIS_URL`): `api/walk.js` saves each shared walk there for 30 days. Without

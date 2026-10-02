@@ -144,7 +144,7 @@ const ui = {
 const storyText = new StoryText(ui.story);
 // Sit on any high crest and watch (not where the story has its own seat, nor at its end)
 const crestSeat = new CrestSeat(player, (x, z) => world.groundAt(x, z), document.getElementById('pause-hint'), () =>
-    story.current !== 'rest' && !player.interaction.target &&
+    story.current !== 'rest' && !player.interaction.target && !messages.near && !messages.reading &&
     !(story.current === 'morning' && storyState.distanceToSeat < 4));
 // Rest your gaze on a constellation and its figure draws itself
 const constellations = new Constellations(world.sky, document.getElementById('constellation'), world.solids);
@@ -213,7 +213,7 @@ messages.receive(onTheWay).then(found => {
 
 document.addEventListener('keydown', event => {
     // E is also for interacting: it only means "sit" when nothing is in focus
-    if (event.code === 'KeyE' && player.isLocked && story.current === 'morning' && !player.interaction.target) storyState.wantsToSit = true;
+    if (event.code === 'KeyE' && player.isLocked && story.current === 'morning' && !player.interaction.target && !messages.near) storyState.wantsToSit = true;
 });
 
 // On a phone or tablet: how to walk with fingers, and the prompts can be tapped
@@ -241,7 +241,7 @@ tiltToggle.addEventListener('click', async () => {
 let wakeLock = null;
 document.addEventListener('click', event => {
     // Let the UI controls be used without grabbing the mouse
-    if (event.target.closest('#audio-controls, #restart-button, #tilt-toggle, #leave, #leave-button, #share-button, #share-link')) return;
+    if (event.target.closest('#audio-controls, #restart-button, #tilt-toggle, #leave, #leave-button, #share-button, #share-link, #read-hint, #reading')) return;
 
     if (!player.isLocked) {
         player.lock();
@@ -321,6 +321,7 @@ function animate() {
     story.update(delta);
     storyText.update(delta);
     moments.update(delta, camera.position.x, camera.position.z);
+    messages.update();
     if (['night', 'crossing'].includes(story.current)) pathRecorder.add(player.eye.x, player.eye.z);
     if (visitRemembered && !player.seated) walkRecorder.add(player.eye.x, player.eye.z);
 

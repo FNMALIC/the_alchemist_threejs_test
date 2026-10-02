@@ -10,17 +10,27 @@ import { createClient } from 'redis';
 import { randomBytes } from 'node:crypto';
 
 const DAYS = 30;
-const MAX_LENGTH = 64000; // Characters: a walk with three small pictures is far below this
+const MAX_LENGTH = 300000; // Characters: a walk with three pictures (~30,000 each) is far below this
 const PACKED = /^[zj][A-Za-z0-9_-]+$/; // What sharing.js makes: a packing letter, then base64url
 const ID = /^[A-Za-z0-9]{8}$/;
 const LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
 
 let client = null;
 async function redis() {
+    if (client && !client.isReady) {
+        client.disconnect().catch(() => {}); // The connection dropped: start a new one
+        client = null;
+    }
     if (!client) {
-        client = createClient({ url: process.env.REDIS_URL });
+        // Fail fast rather than retry forever when the storage cannot be reached
+        client = createClient({ url: process.env.REDIS_URL, socket: { connectTimeout: 5000, reconnectStrategy: false } });
         client.on('error', () => {}); // Reported per request below
-        await client.connect();
+        try {
+            await client.connect();
+        } catch (error) {
+            client = null;
+            throw error;
+        }
     }
     return client;
 }

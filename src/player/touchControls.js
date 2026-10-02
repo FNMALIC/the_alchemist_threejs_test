@@ -58,14 +58,14 @@ export class TouchControls {
         document.addEventListener('visibilitychange', () => { this.tilt = null; });
 
         // The prompts on screen can be tapped instead of pressing E
-        ['hint', 'pause-hint', 'interaction-prompt'].forEach(id => {
+        ['hint', 'pause-hint', 'interaction-prompt', 'read-hint'].forEach(id => {
             document.getElementById(id)?.addEventListener('click', () => pressKey('KeyE', 'e'));
         });
     }
 
     start(event) {
         if (!this.player.isLocked) return; // The first tap starts the experience (see main.js)
-        if (event.target.closest?.('#hint, #pause-hint, #interaction-prompt, #restart-button, #leave-button, #leave, #share-button, #share-link')) return;
+        if (event.target.closest?.('#hint, #pause-hint, #interaction-prompt, #read-hint, #reading, #restart-button, #leave-button, #leave, #share-button, #share-link')) return;
         event.preventDefault();
         for (const touch of event.changedTouches) {
             if (touch.clientX < window.innerWidth / 2 && !this.walkTouch) {

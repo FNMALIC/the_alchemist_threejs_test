@@ -13,8 +13,11 @@
 export const MAX_NOTES = 3;
 export const MAX_TEXT = 220; // Characters in a note
 const MAX_PATH = 900; // Points
-const PICTURE_SIDE = 128; // Pixels on the longer side
-const PICTURE_QUALITY = 0.5;
+const PICTURE_SIDE = 400; // Pixels on the longer side, when the walk is saved online (short link)
+const PICTURE_QUALITY = 0.65;
+const LINK_PICTURE_SIDE = 128; // ...and shrunk to this when it has to travel in a long link
+const LINK_PICTURE_QUALITY = 0.5;
+const MAX_PICTURE = 120000; // Characters of one picture's data URL
 const PICTURE_PATTERN = /^data:image\/(jpeg|webp);base64,[A-Za-z0-9+/=]+$/;
 const PREFIX = '#walk=';
 const SHORT_PREFIX = '#w=';
@@ -43,9 +46,9 @@ async function pipe(bytes, stream) {
 
 // Shrink a picture from the device to a small, faded sepia photograph (a data URL), small
 // enough for a link
-export async function shrinkPicture(file) {
+export async function shrinkPicture(file, side = PICTURE_SIDE, quality = PICTURE_QUALITY) {
     const bitmap = await createImageBitmap(file);
-    const scale = Math.min(1, PICTURE_SIDE / Math.max(bitmap.width, bitmap.height));
+    const scale = Math.min(1, side / Math.max(bitmap.width, bitmap.height));
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.round(bitmap.width * scale));
     canvas.height = Math.max(1, Math.round(bitmap.height * scale));
@@ -66,8 +69,15 @@ export async function shrinkPicture(file) {
     context.putImageData(image, 0, 0);
 
     // WebP is smaller; browsers that cannot make it (Safari) fall back to JPEG
-    const webp = canvas.toDataURL('image/webp', PICTURE_QUALITY);
-    return webp.startsWith('data:image/webp') ? webp : canvas.toDataURL('image/jpeg', PICTURE_QUALITY);
+    const webp = canvas.toDataURL('image/webp', quality);
+    return webp.startsWith('data:image/webp') ? webp : canvas.toDataURL('image/jpeg', quality);
+}
+
+// A picture (data URL) made smaller still, for a long link
+async function forLink(picture) {
+    if (!picture) return picture;
+    const blob = await (await fetch(picture)).blob();
+    return shrinkPicture(blob, LINK_PICTURE_SIDE, LINK_PICTURE_QUALITY);
 }
 
 // --- Walks <-> links ---
@@ -77,9 +87,15 @@ export async function shrinkPicture(file) {
 export async function linkForWalk(path, notes) {
     const packed = await packWalk(path, notes);
     const base = `${location.origin}${location.pathname}`;
+    const long = async () => {
+        // Everything in the link: the pictures must be much smaller
+        const small = await Promise.all(notes.map(async note => ({ ...note, picture: await forLink(note.picture) })));
+        return `${base}${PREFIX}${await packWalk(path, small)}`;
+    };
     try {
         const response = await fetch('/api/walk', {
             method: 'POST',
+            signal: AbortSignal.timeout?.(10000), // Storage slow or down: the long link instead
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ walk: packed })
         });
@@ -90,7 +106,7 @@ export async function linkForWalk(path, notes) {
     } catch {
         // No storage here (or offline): the long link still works
     }
-    return `${base}${PREFIX}${packed}`;
+    return long();
 }
 
 // The walk as text: a packing letter ('z' compressed, 'j' plain), then base64url
@@ -126,7 +142,7 @@ export async function walkFromLink(hash = location.hash) {
         const id = hash.slice(SHORT_PREFIX.length);
         if (!/^[A-Za-z0-9]{8}$/.test(id)) return null;
         try {
-            const response = await fetch(`/api/walk?id=${id}`);
+            const response = await fetch(`/api/walk?id=${id}`, { signal: AbortSignal.timeout?.(15000) });
             if (!response.ok) return null;
             const { walk } = await response.json();
             return typeof walk === 'string' ? unpackWalk(walk) : null;
@@ -163,7 +179,7 @@ async function unpackWalk(packed) {
             // Only small WebP or JPEG pictures, as made by shrinkPicture, or a pointer to an earlier one
             let picture = null;
             if (typeof note.i === 'string' && /^@\d$/.test(note.i)) picture = notes[Number(note.i.slice(1))]?.picture ?? null;
-            else if (typeof note.i === 'string' && note.i.length < 60000 && PICTURE_PATTERN.test(note.i)) picture = note.i;
+            else if (typeof note.i === 'string' && note.i.length < MAX_PICTURE && PICTURE_PATTERN.test(note.i)) picture = note.i;
             notes.push({ x: note.x, z: note.z, text: note.t.slice(0, MAX_TEXT), picture });
         }
         return { path, notes };

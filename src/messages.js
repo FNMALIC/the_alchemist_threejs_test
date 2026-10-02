@@ -5,6 +5,11 @@
 // your walk" makes a link with your path and what you left (see sharing.js).
 // Opening such a link: the same desert, with your friend's footprints across it and their notes
 // and pictures under stones where they left them. You never meet; you only find what they left.
+// Reading: near a note, "E — read" (a tappable "Read" on a phone) opens it; E again, "Put it
+// back", a tap, or walking on closes it.
+const READ_DISTANCE = 2.2; // Metres: close enough to pick it up
+const PUT_BACK_DISTANCE = 3.5; // Walking further than this puts it back
+
 import { linkForWalk, walkFromLink, shrinkPicture, MAX_NOTES, MAX_TEXT } from './sharing.js';
 
 export class Messages {
@@ -18,6 +23,9 @@ export class Messages {
         this.notes = []; // What you have left: { x, z, text, picture }
         this.picture = null;
         this.friend = null; // The walk from a shared link, once read
+        this.readable = []; // Every note lying in the desert (yours and a friend's)
+        this.near = null; // The note close enough to read
+        this.reading = null; // The note open now
 
         const $ = id => document.getElementById(id);
         this.panel = $('leave');
@@ -27,10 +35,24 @@ export class Messages {
         this.preview = $('leave-preview');
         this.shareButton = $('share-button');
         this.shareLink = $('share-link');
+        this.readHint = $('read-hint');
+        this.readPanel = $('reading');
+        this.readText = $('reading-text');
+        this.readPicture = $('reading-picture');
+        this.putBack = $('reading-close');
+        this.putBack.textContent = player.touch ? 'Put it back' : 'E — put it back';
 
         document.addEventListener('keydown', event => {
             if (event.code === 'KeyN' && player.isLocked && !event.repeat) this.open();
+            if (event.code !== 'KeyE' || event.repeat || !player.isLocked) return;
+            // Near a note, E is for reading it (and nothing else: not sitting)
+            if (this.reading) this.putAway();
+            else if (this.near && !player.interaction.target && !player.seated) this.read(this.near);
+            else return;
+            event.stopImmediatePropagation();
         });
+        this.readPanel.addEventListener('click', () => this.putAway());
+        player.pointerLock.addEventListener('unlock', () => this.putAway());
         $('leave-button').addEventListener('click', () => this.open());
         $('leave-cancel').addEventListener('click', () => this.close());
         $('leave-ok').addEventListener('click', () => this.leave());
@@ -83,6 +105,7 @@ export class Messages {
         const { x, z } = this.player.eye;
         const note = { x, z, text, picture: this.picture };
         this.notes.push(note);
+        this.readable.push(note);
         this.traces.leaveMessage(note);
         this.close();
         this.storyText.show(this.notes.length < MAX_NOTES ? 'Left here, for whoever comes next.' : 'Left here. That is all you can carry.', 4);
@@ -125,11 +148,43 @@ export class Messages {
         }
         for (const note of walk.notes) {
             this.traces.leaveMessage(note);
-            this.moments.add({
-                x: note.x, z: note.z, radius: 3,
-                text: note.text || ' ', picture: note.picture, style: 'letter', duration: note.picture ? 14 : 10
-            });
+            this.readable.push(note);
         }
         return true;
+    }
+
+    // Call every frame: which note is close enough to read, and putting it back when you walk on
+    update() {
+        const { x, z } = this.player.eye;
+        const distance = note => Math.hypot(note.x - x, note.z - z);
+        if (this.reading && distance(this.reading) > PUT_BACK_DISTANCE) this.putAway();
+        let near = null;
+        if (this.player.isLocked && !this.isOpen && !this.player.interaction.target) {
+            for (const note of this.readable) {
+                if (distance(note) < READ_DISTANCE && (!near || distance(note) < distance(near))) near = note;
+            }
+        }
+        this.near = near;
+        const touch = this.player.touch;
+        const text = near?.picture && !near.text ? (touch ? 'Look' : 'E — look') : (touch ? 'Read' : 'E — read');
+        if (this.readHint.textContent !== text) this.readHint.textContent = text;
+        this.readHint.classList.toggle('visible', Boolean(near) && !this.reading);
+    }
+
+    read(note) {
+        this.reading = note;
+        this.readText.textContent = note.text;
+        this.readText.hidden = !note.text;
+        if (note.picture) this.readPicture.src = note.picture;
+        else this.readPicture.removeAttribute('src');
+        this.readPicture.hidden = !note.picture;
+        this.readPanel.classList.add('visible');
+        this.readHint.classList.remove('visible');
+    }
+
+    putAway() {
+        if (!this.reading) return;
+        this.reading = null;
+        this.readPanel.classList.remove('visible');
     }
 }
