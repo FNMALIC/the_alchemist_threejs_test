@@ -118,11 +118,20 @@ export class PlayerController extends EventDispatcher {
         return this.movement.seated !== null;
     }
 
-    // Sit down at (x, z) and turn, over a few seconds, to face (lookX, lookZ). There is no
-    // getting up; looking around stays free.
-    sit(x, z, lookX, lookZ) {
+    // Sit down at (x, z), and if (lookX, lookZ) is given, turn over a few seconds to face it.
+    // Looking around stays free. A permanent seat has no getting up (the end of the journey).
+    sit(x, z, lookX, lookZ, { permanent = true } = {}) {
         this.movement.sit(x, z);
-        this.sitting = { yaw: Math.atan2(-(lookX - x), -(lookZ - z)), time: 0 };
+        this.permanentSeat = permanent;
+        this.sitting = lookX === undefined ? null : { yaw: Math.atan2(-(lookX - x), -(lookZ - z)), time: 0 };
+        this.releaseKeys();
+    }
+
+    standUp() {
+        if (!this.seated || this.permanentSeat) return;
+        this.movement.standUp();
+        this.sitting = null;
+        this.dispatchEvent({ type: 'stand' });
     }
 
     lock() {
@@ -131,7 +140,10 @@ export class PlayerController extends EventDispatcher {
 
     setKey(code, pressed) {
         const action = KEY_BINDINGS[code];
-        if (action) this.movement.moving[action] = pressed;
+        if (!action) return;
+        // Starting to walk gets you up (unless it is the last seat)
+        if (pressed && action !== 'hurry' && this.seated) this.standUp();
+        this.movement.moving[action] = pressed;
     }
 
     releaseKeys() {

@@ -65,6 +65,7 @@ export class Movement {
         this.windDirection = new THREE.Vector2(1.6, 0.6).normalize();
         this.time = 0;
         this.seated = null; // { x, z } once sitting down
+        this.attention = 0; // 0 .. 1 near something that holds the attention: the walk slows
         this.gradient = new THREE.Vector2();
         this.frameStart = new THREE.Vector3(); // Reused every frame
         this.stepStart = new THREE.Vector3();
@@ -103,7 +104,11 @@ export class Movement {
         );
     }
 
-    // Sit down at (x, z). There is no getting up.
+    standUp() {
+        this.seated = null;
+    }
+
+    // Sit down at (x, z)
     sit(x, z) {
         this.seated = { x, z };
         this.velocity.set(0, 0, 0);
@@ -146,7 +151,8 @@ export class Movement {
         const position = this.position;
         const before = this.stepStart.copy(position);
 
-        const targetSpeed = moving.hurry ? HURRY_SPEED : WALK_SPEED;
+        // Near something that matters, the feet slow on their own
+        const targetSpeed = (moving.hurry ? HURRY_SPEED : WALK_SPEED) * (1 - 0.45 * this.attention);
         const acceleration = targetSpeed * DAMPING;
 
         velocity.x -= velocity.x * DAMPING * delta;

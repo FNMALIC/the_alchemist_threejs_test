@@ -41,18 +41,19 @@ export class TouchControls {
         element.addEventListener('touchcancel', event => this.end(event));
 
         // The prompts on screen can be tapped instead of pressing E
-        ['hint', 'interaction-prompt'].forEach(id => {
+        ['hint', 'pause-hint', 'interaction-prompt'].forEach(id => {
             document.getElementById(id)?.addEventListener('click', () => pressKey('KeyE', 'e'));
         });
     }
 
     start(event) {
         if (!this.player.isLocked) return; // The first tap starts the experience (see main.js)
-        if (event.target.closest?.('#hint, #interaction-prompt, #restart-button')) return;
+        if (event.target.closest?.('#hint, #pause-hint, #interaction-prompt, #restart-button')) return;
         event.preventDefault();
         for (const touch of event.changedTouches) {
             if (touch.clientX < window.innerWidth / 2 && !this.walkTouch) {
                 this.walkTouch = { id: touch.identifier, x: touch.clientX, y: touch.clientY };
+                this.player.standUp(); // Starting to walk gets you up (unless it is the last seat)
                 this.steer(0, 0);
                 this.ring.style.left = `${touch.clientX}px`;
                 this.ring.style.top = `${touch.clientY}px`;

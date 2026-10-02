@@ -3,6 +3,8 @@ import * as THREE from 'three';
 import { World } from './world/world.js';
 import { PlayerController } from './player/playerController.js';
 import { BodyShadow } from './player/bodyShadow.js';
+import { CrestSeat } from './player/crestSeat.js';
+import { BreathMist } from './player/breathMist.js';
 import { Orb } from './orb.js';
 import { AmbientAudio } from './audio.js';
 import { JourneyMusic } from './music.js';
@@ -104,6 +106,7 @@ player.onLand = strength => {
 const memory = loadMemory();
 const traces = new Traces(world, world.oldTree.position, ORB_POSITION, memory);
 const soundscape = new Soundscape(music, world, traces); // Silence, crests and hollows, singing dunes
+const breathMist = new BreathMist(scene); // Your breath in the cold night air
 const pathRecorder = new PathRecorder();
 const storm = new Storm();
 
@@ -132,6 +135,10 @@ const ui = {
     interactionPrompt: document.getElementById('interaction-prompt')
 };
 const storyText = new StoryText(ui.story);
+// Sit on any high crest and watch (not where the story has its own seat, nor at its end)
+const crestSeat = new CrestSeat(player, world.heightAt, document.getElementById('pause-hint'), () =>
+    story.current !== 'rest' && !player.interaction.target &&
+    !(story.current === 'morning' && storyState.distanceToSeat < 4));
 // Rest your gaze on a constellation and its figure draws itself
 const constellations = new Constellations(world.sky, document.getElementById('constellation'), world.solids);
 new InteractionPrompt(player.interaction, { element: ui.interactionPrompt, crosshair: ui.crosshair });
@@ -293,6 +300,14 @@ function animate() {
     soundscape.update(delta, {
         eye: player.eye, slide: player.slide, sunAltitude: world.sky.sunAltitude, storm: stormIntensity, distanceWalked
     });
+    crestSeat.update(delta, soundscape.exposure);
+    // Near the traveller's things, the walk slows on its own, as if paying attention
+    let nearest = Infinity;
+    for (const mark of traces.landmarks) nearest = Math.min(nearest, Math.hypot(player.eye.x - mark.x, player.eye.z - mark.z));
+    player.movement.attention = 1 - THREE.MathUtils.smoothstep(nearest, 2, 8);
+    // Breath in the cold: the night air, until the sun warms it
+    breathMist.update(delta, camera, player.breathing, world.wind,
+        (1 - THREE.MathUtils.smoothstep(world.sky.sunAltitude, -6, 5)) * (1 - stormIntensity), world.sandLight());
     music.update(delta, {
         progress: world.sky.dawnProgress, sunAltitude: world.sky.sunAltitude, storm: stormIntensity, wind: world.wind,
         silence: soundscape.silence, exposure: soundscape.exposure
@@ -328,7 +343,7 @@ renderer.renderer.setAnimationLoop(animate);
 if (import.meta.env.DEV) {
     window.mirage = {
         scene, camera, player, orb, world, story, storyState, renderer: renderer.renderer,
-        music, audio, traces, debug, storm, constellations, rendering: renderer, soundscape,
+        music, audio, traces, debug, storm, constellations, rendering: renderer, soundscape, crestSeat, breathMist,
         interaction: player.interaction,
         environment,
         get testInteractables() { return testInteractables; }

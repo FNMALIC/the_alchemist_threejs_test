@@ -194,7 +194,7 @@
     #constellation .meaning:empty { display: none; }
 
     /* A quiet prompt, e.g. "E — sit" under the old tree */
-    #hint {
+    #hint, #pause-hint {
       position: absolute;
       left: 50%;
       bottom: 150px; /* Above the letters in the corner */
@@ -209,9 +209,9 @@
       opacity: 0;
       transition: opacity 1.2s ease, transform 1.2s ease;
     }
-    #hint.visible { opacity: 1; transform: translate(-50%, 0); }
+    #hint.visible, #pause-hint.visible { opacity: 1; transform: translate(-50%, 0); }
     /* On a phone the quiet prompts are what you tap */
-    body.touch #hint.visible, body.touch #interaction-prompt.visible {
+    body.touch #hint.visible, body.touch #pause-hint.visible, body.touch #interaction-prompt.visible {
       pointer-events: auto;
       padding: 10px 18px;
       border-radius: 18px;
@@ -269,6 +269,7 @@
 <div id="story"></div>
 <div id="constellation" aria-live="polite"><span class="name"></span><span class="meaning"></span></div>
 <div id="hint">E — sit</div>
+<div id="pause-hint"></div>
 <div id="fade-overlay"></div>
 <button id="restart-button">Walk again</button>
 <script type="module" src="./src/main.js"></script>

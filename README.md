@@ -26,8 +26,8 @@ npm run preview   # serve the production build
 ```
 
 **Controls:** click to start, move the mouse to look around, WASD / arrow keys to walk,
-Shift to hurry, Space to jump, E to interact with something you are looking at (or to sit
-under the old tree, in the morning), Esc to let go of the mouse (click to carry on).
+Shift to hurry, Space to jump, E to interact with something you are looking at, to sit on a
+high dune crest (E again to get up), or to sit under the old tree in the morning, Esc to let go of the mouse (click to carry on).
 Headphones recommended.
 
 **On a phone or tablet:** tap to start, hold the left side of the screen to walk (slide your thumb
@@ -67,6 +67,8 @@ src/
     gait.js              Natural head motion while walking (step rhythm, sway, roll)
     spring.js            Critically damped spring used by the head
     bodyShadow.js        Your shadow on the sand, from a body only the lights can see
+    breathMist.js        Your breath in the cold night air, until the sun warms it
+    crestSeat.js         Sit on any high dune crest (E), and get up again
   interactions/
     interaction.js       Noticing things: focus state machine, E to interact, events, context
     gaze.js              What the crosshair rests on: centre ray plus a little tolerance, registered things only

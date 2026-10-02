@@ -85,12 +85,20 @@ export class Traces {
         this.whiteStone(well.x + 1.35, well.z + 0.5);
         this.dig(lightPosition.x + 0.4, lightPosition.z - 0.5);
         this.places = { campfire, well, jar, turn, stargazing };
+        // Everything of theirs worth slowing down for
+        this.landmarks = [
+            campfire, well, jar, turn, stargazing,
+            { x: jar.x - 2.2, z: jar.z + 1.4 }, // The drawing
+            { x: well.x + 1.35, z: well.z + 0.5 }, // The white stone
+            { x: lightPosition.x + 0.4, z: lightPosition.z - 0.5 } // The hole
+        ];
 
         // Under the old tree: a seat facing the desert, and their small stack of stones beside it
         const toLight = new THREE.Vector2(lightPosition.x - oldTree.x, lightPosition.z - oldTree.z).normalize();
         this.seat = { x: oldTree.x + toLight.x * 1.1, z: oldTree.z + toLight.y * 1.1 };
         this.lookFromSeat = { x: lightPosition.x, z: lightPosition.z };
         this.cairn = this.stackOfStones(this.seat.x + toLight.y * 0.9, this.seat.z - toLight.x * 0.9, memory.journeys);
+        this.landmarks.push(this.cairn);
         this.note(this.cairn.x + 0.35, this.cairn.z + 0.3, 0.8);
 
         // Your own last walk, still faintly in the sand
