@@ -4,7 +4,6 @@ import { World } from './world/world.js';
 import { PlayerController } from './player/playerController.js';
 import { BodyShadow } from './player/bodyShadow.js';
 import { CrestSeat } from './player/crestSeat.js';
-import { BreathMist } from './player/breathMist.js';
 import { Orb } from './orb.js';
 import { AmbientAudio } from './audio.js';
 import { JourneyMusic } from './music.js';
@@ -71,6 +70,7 @@ scene.add(orbLight);
 
 const player = new PlayerController(camera, document.body, {
     groundHeightAt: (x, z) => world.groundAt(x, z), // The dunes, or the pyramid's steps
+    sandHeightAt: world.heightAt, // The dunes alone (sliding and slopes are for sand)
     colliders: world.colliders,
     isUnderWater: (x, z) => world.isUnderWater(x, z),
     isFirmGround: (x, z) => world.isFirmGround(x, z)
@@ -112,7 +112,6 @@ const traces = new Traces(world, world.oldTree.position, ORB_POSITION, memory);
 const morningStar = horizontalPosition(Body.Venus, new Date(world.sky.clock.end - 40 * 60000)).altitude > 5;
 const thisVisit = skyOfThisVisit(world.sky, morningStar);
 const soundscape = new Soundscape(music, world, traces); // Silence, crests and hollows, singing dunes
-const breathMist = new BreathMist(scene); // Your breath in the cold night air
 const pathRecorder = new PathRecorder();
 const storm = new Storm();
 
@@ -320,9 +319,6 @@ function animate() {
     let nearest = Infinity;
     for (const mark of traces.landmarks) nearest = Math.min(nearest, Math.hypot(player.eye.x - mark.x, player.eye.z - mark.z));
     player.movement.attention = 1 - THREE.MathUtils.smoothstep(nearest, 2, 8);
-    // Breath in the cold: the night air, until the sun warms it
-    breathMist.update(delta, camera, player.breathing, world.wind,
-        (1 - THREE.MathUtils.smoothstep(world.sky.sunAltitude, -6, 5)) * (1 - stormIntensity), world.sandLight());
     music.update(delta, {
         progress: world.sky.dawnProgress, sunAltitude: world.sky.sunAltitude, storm: stormIntensity, wind: world.wind,
         silence: soundscape.silence, exposure: soundscape.exposure
@@ -358,7 +354,7 @@ renderer.renderer.setAnimationLoop(animate);
 if (import.meta.env.DEV) {
     window.mirage = {
         scene, camera, player, orb, world, story, storyState, renderer: renderer.renderer,
-        music, audio, traces, debug, storm, constellations, rendering: renderer, soundscape, crestSeat, breathMist,
+        music, audio, traces, debug, storm, constellations, rendering: renderer, soundscape, crestSeat,
         interaction: player.interaction,
         environment,
         get testInteractables() { return testInteractables; }

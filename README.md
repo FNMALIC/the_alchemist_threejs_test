@@ -67,7 +67,6 @@ src/
     gait.js              Natural head motion while walking (step rhythm, sway, roll)
     spring.js            Critically damped spring used by the head
     bodyShadow.js        Your shadow on the sand, from a body only the lights can see
-    breathMist.js        Your breath in the cold night air, until the sun warms it
     crestSeat.js         Sit on any high dune crest (E), and get up again
   interactions/
     interaction.js       Noticing things: focus state machine, E to interact, events, context

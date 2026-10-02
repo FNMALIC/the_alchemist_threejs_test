@@ -207,7 +207,6 @@ The journey matters more than the destination. Very few words; the world tells t
 - [x] Their trail is faint at night and comes out at dawn, when the low sun rakes across it
 
 ## The way you move ✅
-- [x] Your breath in the cold: each breath out leaves a faint cloud that drifts on the wind and thins away (more after hurrying); it fades as the sun warms the air
 - [x] Sit on any high crest: stand still on a ridge and "E — sit here" appears (a tap on a phone); E again, or starting to walk, gets you up
 - [x] Near the traveller's things (the campfire, the well, the jar, the hollow, the drawing, the stone, the hole, their stones) the walk slows on its own, as if paying attention
 

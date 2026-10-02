@@ -32,15 +32,19 @@ const SITTING_EYE_HEIGHT = 0.95;
 
 export class Movement {
     // position: the eye position (without the head's motion), moved in place
-    // groundHeightAt(x, z): terrain height; bounds: optional { minX, maxX, minZ, maxZ } the player
+    // groundHeightAt(x, z): what you stand on (the dunes, or a stone step)
+    // sandHeightAt(x, z): the dunes alone, for the sand's slopes (defaults to groundHeightAt)
+    // bounds: optional { minX, maxX, minZ, maxZ } the player
     // stays within (the desert has none: it goes on forever)
     // colliders: [{ x, z, radius }] solid things; isUnderWater(x, z): whether a spot is in the pool
     // isFirmGround(x, z): damp, packed sand that doesn't give way (e.g. around the pool)
     constructor(position, {
-        groundHeightAt, bounds = null, colliders = [], isUnderWater = () => false, isFirmGround = () => false
+        groundHeightAt, sandHeightAt = groundHeightAt, bounds = null, colliders = [],
+        isUnderWater = () => false, isFirmGround = () => false
     }) {
         this.position = position;
         this.groundHeightAt = groundHeightAt;
+        this.sandHeightAt = sandHeightAt;
         this.bounds = bounds;
         this.colliders = colliders;
         this.isUnderWater = isUnderWater;
@@ -95,13 +99,22 @@ export class Movement {
         this.slide.set(0, 0);
     }
 
-    // Slope of the ground at (x, z): gradient (rise per metre in x and z)
+    // Slope of the sand at (x, z): gradient (rise per metre in x and z). Stone steps are not a
+    // slope of sand: they are climbed (see walk)
     slopeAt(x, z, target = this.gradient) {
         const e = 0.4;
         return target.set(
-            (this.groundHeightAt(x + e, z) - this.groundHeightAt(x - e, z)) / (2 * e),
-            (this.groundHeightAt(x, z + e) - this.groundHeightAt(x, z - e)) / (2 * e)
+            (this.sandHeightAt(x + e, z) - this.sandHeightAt(x - e, z)) / (2 * e),
+            (this.sandHeightAt(x, z + e) - this.sandHeightAt(x, z - e)) / (2 * e)
         );
+    }
+
+    // Steps of stone under (x, z) along the direction (dx, dz): +1 climbing, -1 going down, 0 none
+    stairsAlong(x, z, dx, dz) {
+        const ahead = this.groundHeightAt(x + dx * 0.8, z + dz * 0.8) - this.sandHeightAt(x + dx * 0.8, z + dz * 0.8);
+        const behind = this.groundHeightAt(x - dx * 0.8, z - dz * 0.8) - this.sandHeightAt(x - dx * 0.8, z - dz * 0.8);
+        if (ahead < 0.3 && behind < 0.3) return 0; // Sand all round
+        return Math.sign(ahead - behind);
     }
 
     standUp() {
@@ -200,8 +213,15 @@ export class Movement {
                 speed = 1 + 0.2 * Math.min(1, angle / (20 * Math.PI / 180));
             }
 
-            // Stone (the pyramid's courses) is climbed step by step: hard work, but it holds
-            if (along > 0 && this.isFirmGround(position.x, position.z)) speed = Math.max(speed, 0.55);
+            // Stone steps (the pyramid's courses) are climbed one by one: slower and hard work going
+            // up, careful going down
+            const stairs = this.stairsAlong(before.x, before.z, stepX / stepLength, stepZ / stepLength);
+            if (stairs > 0) {
+                speed = 0.6;
+                this.effort = Math.max(this.effort, 0.75);
+            } else if (stairs < 0) {
+                speed = 0.75;
+            }
             speed *= 1 - 0.45 * this.storm; // Leaning into the wind
             if (this.isUnderWater(position.x, position.z)) speed *= WADING_SPEED;
             else if (!this.isFirmGround(position.x, position.z)) speed *= 0.92; // Soft sand
