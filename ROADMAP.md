@@ -223,6 +223,12 @@ The journey matters more than the destination. Very few words; the world tells t
 - [x] The jackal: near-pure howling voices with breath, wavering and breaking, four of them, two echoes; the singing dune: the hiss of sliding sand and a rumble under the boom, its pitch drifting
 - [x] Pacing: the walk slows a little less near their traces (30%, within 6 m); the pyramid climbs a little faster
 
+## Become the traveller for someone else ✅
+- [x] Leave up to three things on your walk (N, or "Leave something" on a phone): a few lines, and a picture from your device if you like, shrunk to a small photograph lying in the sand under a stone
+- [x] "Share your walk" (when you stop, and at the end): a link with your path and what you left; phones open their share sheet, elsewhere it is copied
+- [x] Opening the link: your friend's desert has your footprints across it, your notes and pictures where you left them (read as letters, with the picture), and a first line: "Someone walked here before you. They left you something."
+- [x] No server: everything travels in the link's #fragment, compressed; what comes in is checked (plain text, small JPEG pictures only)
+
 ## Next ideas
 
 - [x] Daylight details on the way back: in the morning, fresh tracks cross places you passed in the dark (a fox by the fire and the well, beetles by the jar and under the tree), and the oasis flowers, closed at night, open in the sun

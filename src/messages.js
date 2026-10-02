@@ -47,6 +47,7 @@ export class Messages {
             this.storyText.show('You have left all you can carry.', 4);
             return;
         }
+        document.body.classList.add('leaving'); // Only the panel while you write
         this.player.pointerLock.unlock(); // To type, the mouse (or the walk) has to let go
         this.text.value = '';
         this.picture = null;
@@ -59,6 +60,7 @@ export class Messages {
 
     close() {
         this.panel.classList.remove('visible');
+        document.body.classList.remove('leaving');
         this.player.lock(); // Back to the walk (this is a click, so the browser allows it)
     }
 
