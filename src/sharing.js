@@ -2,14 +2,18 @@
 // footprints and the few things you left on the way: some lines of writing, a picture.
 //
 // Everything travels in the link's #fragment (never sent to any server): the path, the notes,
-// and small JPEG pictures, packed as JSON and compressed. Nothing is stored anywhere else.
-// What comes back out of a link is checked strictly: only plain text, and only JPEG pictures.
+// and small pictures, packed as JSON and compressed. Nothing is stored anywhere else.
+// Pictures are what make a link long, so they are kept small: faded, sepia photographs (as an
+// old picture left in the sand would be), WebP where the browser can make it, JPEG otherwise,
+// and a picture left twice is carried once.
+// What comes back out of a link is checked strictly: only plain text, and only WebP or JPEG pictures.
 
 export const MAX_NOTES = 3;
 export const MAX_TEXT = 220; // Characters in a note
 const MAX_PATH = 900; // Points
-const PICTURE_SIDE = 200; // Pixels on the longer side
-const PICTURE_QUALITY = 0.6;
+const PICTURE_SIDE = 128; // Pixels on the longer side
+const PICTURE_QUALITY = 0.5;
+const PICTURE_PATTERN = /^data:image\/(jpeg|webp);base64,[A-Za-z0-9+/=]+$/;
 const PREFIX = '#walk=';
 
 // --- Bytes <-> base64url, and (de)compression where the browser can ---
@@ -34,16 +38,33 @@ async function pipe(bytes, stream) {
 
 // --- Pictures ---
 
-// Shrink a picture from the device to a small JPEG (a data URL), small enough for a link
+// Shrink a picture from the device to a small, faded sepia photograph (a data URL), small
+// enough for a link
 export async function shrinkPicture(file) {
     const bitmap = await createImageBitmap(file);
     const scale = Math.min(1, PICTURE_SIDE / Math.max(bitmap.width, bitmap.height));
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.round(bitmap.width * scale));
     canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const context = canvas.getContext('2d');
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
     bitmap.close?.();
-    return canvas.toDataURL('image/jpeg', PICTURE_QUALITY);
+
+    // Sepia, a little faded: warm tones only (a fraction of the colour to store)
+    const image = context.getImageData(0, 0, canvas.width, canvas.height);
+    const pixels = image.data;
+    for (let i = 0; i < pixels.length; i += 4) {
+        const grey = 0.3 * pixels[i] + 0.59 * pixels[i + 1] + 0.11 * pixels[i + 2];
+        const faded = 28 + grey * 0.8;
+        pixels[i] = Math.min(255, faded * 1.08 + 8);
+        pixels[i + 1] = Math.min(255, faded * 0.95 + 4);
+        pixels[i + 2] = Math.min(255, faded * 0.78);
+    }
+    context.putImageData(image, 0, 0);
+
+    // WebP is smaller; browsers that cannot make it (Safari) fall back to JPEG
+    const webp = canvas.toDataURL('image/webp', PICTURE_QUALITY);
+    return webp.startsWith('data:image/webp') ? webp : canvas.toDataURL('image/jpeg', PICTURE_QUALITY);
 }
 
 // --- Walks <-> links ---
@@ -57,9 +78,14 @@ export async function linkForWalk(path, notes) {
             const [px, pz] = i === 0 ? [0, 0] : all[i - 1];
             return [Math.round(x * 2) - Math.round(px * 2), Math.round(z * 2) - Math.round(pz * 2)];
         }),
-        n: notes.slice(0, MAX_NOTES).map(({ x, z, text, picture }) => ({
-            x: Math.round(x * 10) / 10, z: Math.round(z * 10) / 10, t: text.slice(0, MAX_TEXT), i: picture || undefined
-        }))
+        // A picture already carried for an earlier note is pointed to ("@0"), not carried again
+        n: notes.slice(0, MAX_NOTES).map(({ x, z, text, picture }, index, all) => {
+            const earlier = picture ? all.findIndex(note => note.picture === picture) : -1;
+            return {
+                x: Math.round(x * 10) / 10, z: Math.round(z * 10) / 10, t: text.slice(0, MAX_TEXT),
+                i: picture ? (earlier < index ? `@${earlier}` : picture) : undefined
+            };
+        })
     };
     let bytes = new TextEncoder().encode(JSON.stringify(walk));
     let packing = 'j';
@@ -91,13 +117,15 @@ export async function walkFromLink(hash = location.hash) {
             z += steps[i + 1];
             path.push([x / 2, z / 2]);
         }
-        const notes = (Array.isArray(walk.n) ? walk.n : []).slice(0, MAX_NOTES).flatMap(note => {
-            if (!Number.isFinite(note?.x) || !Number.isFinite(note?.z) || typeof note.t !== 'string') return [];
-            // Only small JPEG pictures, as made by shrinkPicture
-            const picture = typeof note.i === 'string' && /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(note.i) && note.i.length < 60000
-                ? note.i : null;
-            return [{ x: note.x, z: note.z, text: note.t.slice(0, MAX_TEXT), picture }];
-        });
+        const notes = [];
+        for (const note of (Array.isArray(walk.n) ? walk.n : []).slice(0, MAX_NOTES)) {
+            if (!Number.isFinite(note?.x) || !Number.isFinite(note?.z) || typeof note.t !== 'string') continue;
+            // Only small WebP or JPEG pictures, as made by shrinkPicture, or a pointer to an earlier one
+            let picture = null;
+            if (typeof note.i === 'string' && /^@\d$/.test(note.i)) picture = notes[Number(note.i.slice(1))]?.picture ?? null;
+            else if (typeof note.i === 'string' && note.i.length < 60000 && PICTURE_PATTERN.test(note.i)) picture = note.i;
+            notes.push({ x: note.x, z: note.z, text: note.t.slice(0, MAX_TEXT), picture });
+        }
         return { path, notes };
     } catch {
         return null;
