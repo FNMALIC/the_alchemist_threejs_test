@@ -37,9 +37,12 @@ function distanceToSegment(px, pz, a, b) {
 
 export class Terrain {
     // oasis, orb: { x, z } centres of the two flat areas
-    constructor({ oasis, orb, size = 600, segments = 280 }) {
+    // plains: [{ x, z, flat, edge }] squares where the dunes give way to flat ground (flat: half
+    // size of the flat part, edge: where the dunes are back to full height)
+    constructor({ oasis, orb, plains = [], size = 600, segments = 280 }) {
         this.oasis = oasis;
         this.orb = orb;
+        this.plains = plains;
         this.size = size;
         this.segments = segments;
         this.cell = size / segments;
@@ -91,7 +94,13 @@ export class Terrain {
         // A shallow hollow for the oasis pool
         const poolDip = -0.6 * (1 - smoothstep(3, 6, Math.hypot(x - this.oasis.poolX, z - this.oasis.poolZ)));
 
-        return dunes * oasisFlat * orbFlat * pathLow + poolDip;
+        // Flat plains, far out (where the pyramid stands)
+        let plain = 1;
+        for (const p of this.plains) {
+            plain *= smoothstep(p.flat, p.edge, Math.max(Math.abs(x - p.x), Math.abs(z - p.z)));
+        }
+
+        return dunes * oasisFlat * orbFlat * pathLow * plain + poolDip;
     }
 
     // Height of the rendered ground mesh (flat triangles between grid points), for things

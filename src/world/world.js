@@ -9,6 +9,7 @@ import { SandPatch } from './sandPatch.js';
 import { DesertChunks, CHUNK_SIZE, KNOWN_CHUNKS } from './desertChunks.js';
 import { Wind } from './wind.js';
 import { SandWisps } from './sandWisps.js';
+import { FarAway, farPlaces, pyramidHeightAt, PYRAMID } from './farAway.js';
 import {
     createOldTree, createPalm, createShrub, createRock, createGrassPatch, createFlower, swayGrass
 } from './props.js';
@@ -59,7 +60,14 @@ export class World {
         this.solids = []; // The objects those belong to (trunks, the old tree, rocks): they block the view
         this.vegetation = []; // { object, kind: 'shrub' | 'flower' } plants that can respond to the player
 
-        this.terrain = new Terrain({ oasis, orb });
+        // Far out, the wrong way from the light: a compass in the sand, and a pyramid on a plain
+        this.far = farPlaces(oasis, orb);
+        const pyramid = this.far.pyramid;
+        this.terrain = new Terrain({
+            oasis, orb, plains: [{ x: pyramid.x, z: pyramid.z, flat: PYRAMID.half + 25, edge: PYRAMID.half + 160 }]
+        });
+        // Where the endless desert puts no rocks or shrubs
+        this.reserved = [{ x: pyramid.x, z: pyramid.z, radius: PYRAMID.half * 1.45 }, { ...this.far.compass, radius: 4 }];
         this.heightAt = (x, z) => this.terrain.heightAt(x, z);
         scene.add(this.terrain.mesh);
 
@@ -85,6 +93,28 @@ export class World {
 
         // One wind for everything that moves with it
         this.wind = new Wind();
+        // The compass lies on the highest ground near its spot: where you find it, you can see far
+        let best = null;
+        for (let dx = -40; dx <= 40; dx += 4) {
+            for (let dz = -40; dz <= 40; dz += 4) {
+                const x = this.far.compass.x + dx, z = this.far.compass.z + dz;
+                const h = this.heightAt(x, z);
+                if (!best || h > best.h) best = { x, z, h };
+            }
+        }
+        this.far.compass = { x: best.x, z: best.z };
+        this.reserved[1] = { ...this.far.compass, radius: 4 };
+        this.farAway = new FarAway(this, this.far);
+        // Beyond the dunes that are drawn, a plain of sand out to the horizon: hidden under the
+        // dunes from the ground, it is what you see far below from high up (the pyramid's top)
+        const { trough, crest } = this.terrain.sandColors;
+        this.farGround = new THREE.Mesh(
+            new THREE.CircleGeometry(4000, 48).rotateX(-Math.PI / 2),
+            new THREE.MeshStandardMaterial({ color: trough.clone().lerp(crest, 0.3), roughness: 1 })
+        );
+        this.farGround.position.y = -3.5;
+        this.farGround.receiveShadow = false;
+        scene.add(this.farGround);
         this.dust = new Dust();
         scene.add(this.dust.points);
         this.wisps = new SandWisps(this.heightAt);
@@ -119,13 +149,23 @@ export class World {
         if (solid !== -1) this.solids.splice(solid, 1);
     }
 
+    // The ground you stand on: the dunes, or the pyramid's stones where it stands
+    groundAt(x, z) {
+        return Math.max(this.heightAt(x, z), pyramidHeightAt(this.far.pyramid, x, z));
+    }
+
+    isReserved(x, z) {
+        return this.reserved.some(r => Math.hypot(x - r.x, z - r.z) < r.radius);
+    }
+
     isUnderWater(x, z) {
         return this.heightAt(x, z) < WATER_LEVEL;
     }
 
     // Damp, packed sand around the pool: firm underfoot, doesn't slide
+    // (and the pyramid's stone, which does not slide or give way either)
     isFirmGround(x, z) {
-        return Math.hypot(x - this.oasis.poolX, z - this.oasis.poolZ) < 8;
+        return Math.hypot(x - this.oasis.poolX, z - this.oasis.poolZ) < 8 || this.farAway.onStone(x, z);
     }
 
     // The oasis: the old tree, a pool, palms, grass and flowers
@@ -234,9 +274,14 @@ export class World {
         this.terrain.follow(camera.position.x, camera.position.z);
         this.chunks.update(camera.position.x, camera.position.z);
         this.scene.fog.color.copy(this.sky.horizonColor).lerp(this.sky.stormColor, storm); // Fog keeps its own copy
+        // The haze lies low: from high up (the pyramid) you see much further
+        const aboveSand = Math.max(0, camera.position.y - this.heightAt(camera.position.x, camera.position.z));
+        const thinning = 1 / (1 + Math.max(0, aboveSand - 8) / 35);
         this.scene.fog.density = THREE.MathUtils.lerp(
             THREE.MathUtils.lerp(FOG_DENSITY_START, FOG_DENSITY_END, this.sky.dawnProgress), STORM_FOG_DENSITY, storm
-        );
+        ) * thinning;
+        this.farGround.position.x = camera.position.x;
+        this.farGround.position.z = camera.position.z;
         const wind = this.wind;
         wind.update(delta, this.sky.sunAltitude, storm);
         this.dust.update(delta, elapsed, camera, storm, wind);
@@ -245,6 +290,7 @@ export class World {
         this.sandPatch.update(delta, camera.position.x, camera.position.z, wind.erosion);
         this.footprints.update(wind.erosion);
         this.updateGlitter();
+        this.farAway.update(camera, this.sky, this.lights, elapsed);
         sandTintAt(this.sky.sunAltitude, this.terrain.sandTint.value);
 
         // The ripples creep downwind, a centimetre or two a second (more in a storm). The ripple

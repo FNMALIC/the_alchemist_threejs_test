@@ -15,7 +15,9 @@ import { Traces } from './world/traces.js';
 import { Constellations } from './world/constellations.js';
 import { Soundscape } from './soundscape.js';
 import { Storm } from './storm.js';
-import { loadMemory, saveMemory, PathRecorder } from './memory.js';
+import { loadMemory, saveMemory, PathRecorder, skyOfThisVisit, returnLine } from './memory.js';
+import { Body } from 'astronomy-engine';
+import { horizontalPosition } from './world/astronomy.js';
 import { Renderer, getQuality } from './render.js';
 import { InteractionPrompt } from './interactions/interactionPrompt.js';
 import { Environment } from './environment/environment.js';
@@ -33,7 +35,8 @@ const parameters = new URLSearchParams(window.location.search);
 
 // Scene, camera, renderer
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+// Far enough to see the pyramid, far out, through the haze
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 3000);
 camera.position.copy(PLAYER_START);
 camera.lookAt(ORB_POSITION.x, 2, ORB_POSITION.z);
 scene.add(camera);
@@ -67,7 +70,7 @@ orbLight.position.copy(ORB_POSITION);
 scene.add(orbLight);
 
 const player = new PlayerController(camera, document.body, {
-    groundHeightAt: world.heightAt,
+    groundHeightAt: (x, z) => world.groundAt(x, z), // The dunes, or the pyramid's steps
     colliders: world.colliders,
     isUnderWater: (x, z) => world.isUnderWater(x, z),
     isFirmGround: (x, z) => world.isFirmGround(x, z)
@@ -105,6 +108,9 @@ player.onLand = strength => {
 // Someone else walked here before you. And the desert remembers your earlier walks.
 const memory = loadMemory();
 const traces = new Traces(world, world.oldTree.position, ORB_POSITION, memory);
+// This night's sky, to compare with next time: is Venus up before the sun (the morning star)?
+const morningStar = horizontalPosition(Body.Venus, new Date(world.sky.clock.end - 40 * 60000)).altitude > 5;
+const thisVisit = skyOfThisVisit(world.sky, morningStar);
 const soundscape = new Soundscape(music, world, traces); // Silence, crests and hollows, singing dunes
 const breathMist = new BreathMist(scene); // Your breath in the cold night air
 const pathRecorder = new PathRecorder();
@@ -136,7 +142,7 @@ const ui = {
 };
 const storyText = new StoryText(ui.story);
 // Sit on any high crest and watch (not where the story has its own seat, nor at its end)
-const crestSeat = new CrestSeat(player, world.heightAt, document.getElementById('pause-hint'), () =>
+const crestSeat = new CrestSeat(player, (x, z) => world.groundAt(x, z), document.getElementById('pause-hint'), () =>
     story.current !== 'rest' && !player.interaction.target &&
     !(story.current === 'morning' && storyState.distanceToSeat < 4));
 // Rest your gaze on a constellation and its figure draws itself
@@ -176,7 +182,8 @@ const storyState = {
     distanceFromStart: 0,
     distanceToSeat: Infinity,
     wantsToSit: false,
-    remember: () => saveMemory({ journeys: memory.journeys + 1, path: pathRecorder.points })
+    returnLine: returnLine(memory.lastVisit, thisVisit), // Coming back: what has changed in the sky
+    remember: () => saveMemory({ journeys: memory.journeys + 1, path: pathRecorder.points, lastVisit: thisVisit })
 };
 const story = new StoryDirector(createStages(storyState), 'night');
 
@@ -229,7 +236,13 @@ document.addEventListener('click', event => {
 });
 
 // While the pointer is locked the crosshair shows; the instructions and volume control step aside
+let visitRemembered = false;
 player.pointerLock.addEventListener('lock', () => {
+    // This visit counts once it has begun (its sky is compared with the next one's)
+    if (!visitRemembered) {
+        visitRemembered = true;
+        saveMemory({ journeys: memory.journeys, path: memory.path, lastVisit: thisVisit });
+    }
     ui.instructions.classList.add('hidden');
     document.body.classList.add('locked');
 });
@@ -260,8 +273,10 @@ function animate() {
     // Measured from the eye position, so the head's sway doesn't count as walking
     const stepped = Math.hypot(player.eye.x - lastPosition.x, player.eye.z - lastPosition.z);
     distanceWalked += stepped;
-    // After the light, the morning goes on as you walk home: the sun climbs, the sand warms
-    if (['morning', 'rest'].includes(story.current)) world.sky.clock.passMorning(stepped * 0.4 + delta * 0.1);
+    // After sunrise the morning goes on as you walk (home, or anywhere): the sun climbs, the sand warms
+    if (['morning', 'rest'].includes(story.current) || world.sky.clock.progress >= 1) {
+        world.sky.clock.passMorning(stepped * 0.4 + delta * 0.1);
+    }
     lastPosition.copy(player.eye);
 
     storyState.distanceToOrb = Math.hypot(camera.position.x - orb.position.x, camera.position.z - orb.position.z);
@@ -325,7 +340,7 @@ function animate() {
     world.updateEnvironment(renderer.renderer);
     // Near the light, its glow comes back up off the sand and warms everything from below
     world.lights.hemisphere.groundColor.lerp(ORB_BOUNCE, 0.55 * orbProximity);
-    bodyShadow.update(delta, player.eye, world.heightAt(player.eye.x, player.eye.z), player.view.yaw, player.movement.speed, player.seated);
+    bodyShadow.update(delta, player.eye, world.groundAt(player.eye.x, player.eye.z), player.view.yaw, player.movement.speed, player.seated);
     // After sunrise the sand warms: the far air wavers, then the horizon starts to look like water
     const clearAir = 1 - stormIntensity;
     renderer.setHeat(

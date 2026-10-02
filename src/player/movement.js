@@ -200,6 +200,8 @@ export class Movement {
                 speed = 1 + 0.2 * Math.min(1, angle / (20 * Math.PI / 180));
             }
 
+            // Stone (the pyramid's courses) is climbed step by step: hard work, but it holds
+            if (along > 0 && this.isFirmGround(position.x, position.z)) speed = Math.max(speed, 0.55);
             speed *= 1 - 0.45 * this.storm; // Leaning into the wind
             if (this.isUnderWater(position.x, position.z)) speed *= WADING_SPEED;
             else if (!this.isFirmGround(position.x, position.z)) speed *= 0.92; // Soft sand

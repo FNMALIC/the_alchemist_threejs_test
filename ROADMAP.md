@@ -211,6 +211,13 @@ The journey matters more than the destination. Very few words; the world tells t
 - [x] Sit on any high crest: stand still on a ridge and "E — sit here" appears (a tap on a phone); E again, or starting to walk, gets you up
 - [x] Near the traveller's things (the campfire, the well, the jar, the hollow, the drawing, the stone, the hole, their stones) the walk slows on its own, as if paying attention
 
+## Coming back, and going the wrong way ✅
+- [x] Each visit remembers its sky (the moon, the morning star, the date); coming back, one line notices what changed ("The moon is fuller than last time.", "Other stars this time. The seasons have turned.")
+- [x] Your stones: a small cairn of your own beside theirs, a stone for each walk; after five walks, a letter from them under it, found on the way home
+- [x] Walk away from the light: some 450 m out, on a rise, a brass compass half buried in the sand, its glass cracked and needle bent; now and then the sun or moon glints on it. Never mentioned
+- [x] Far beyond, more than a kilometre out, a pyramid the size of the Great Pyramid, its casing gone: climb its courses step by step to the flat top (and sit there). It shows through the haze from the compass; the haze is thinner high up, and a plain of sand reaches to the horizon below
+- [x] After sunrise the morning goes on wherever you walk, not only on the way home
+
 ## Next ideas
 
 - [ ] Daylight details on the way back: things you passed in the dark look different in the morning
@@ -220,8 +227,8 @@ The journey matters more than the destination. Very few words; the world tells t
 
 - [ ] Title screen, pause on `Esc`, subtitle/volume menu
 - [ ] Performance pass: instanced flowers and shrubs, measure on real laptops (target 60fps)
-- [ ] Mobile fallback: touch joystick, or a "best on desktop" notice
-- [ ] Deploy (GitHub Pages / Netlify / Vercel)
+- [x] Mobile: touch controls (see "Walk on a phone")
+- [x] Deploy (Vercel)
 
 ---
 

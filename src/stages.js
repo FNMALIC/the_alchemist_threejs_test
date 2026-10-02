@@ -16,7 +16,7 @@ const LEAVE_OASIS_DISTANCE = 25; // From where you woke
 const REACH_DISTANCE = 4.5; // From the light, along the ground
 const SEAT_DISTANCE = 2.5; // From the place under the old tree where you can sit
 
-// state: { orb, audio, music, storyText, sky, player, traces, ui, remember(),
+// state: { orb, audio, music, storyText, sky, player, traces, ui, remember(), returnLine,
 //          distanceToOrb (along the ground), distanceFromStart, distanceToSeat, wantsToSit }
 export function createStages(state) {
     const { orb, audio, music, storyText, sky, player, traces, ui } = state;
@@ -28,6 +28,11 @@ export function createStages(state) {
                 if (stageTime > 2 && !state.nightLineShown) {
                     state.nightLineShown = true;
                     storyText.show(LINES.night, 6);
+                }
+                // Coming back: how the sky has changed since last time
+                if (state.returnLine && stageTime > 9 && !storyText.isShowing) {
+                    storyText.show(state.returnLine, 6);
+                    state.returnLine = null;
                 }
                 if (state.distanceToOrb < REACH_DISTANCE) return 'mirage';
                 if (state.distanceFromStart > LEAVE_OASIS_DISTANCE && !storyText.isShowing) return 'crossing';

@@ -54,7 +54,7 @@ src/
   story.js            Story state machine and story text overlay
   moments.js          Discoveries along the way (lines and letters), shown once when you come near
   storm.js            The sandstorm partway across: when it rises, how long it lasts
-  memory.js           What the browser remembers between visits: your journeys and your last walk
+  memory.js           What the browser remembers between visits: your journeys, your last walk, last visit's sky
   player/
     playerController.js  The player: input, and the order its parts update in each frame
     pointerLock.js       Pointer Lock API (Esc releases, click locks again); on a phone, a tap starts
@@ -104,6 +104,7 @@ src/
     meteors.js        Shooting stars at real rates: sporadic ones and the year's showers from their radiants
     wind.js           One wind for everything: still at night, a breeze before dawn, still at sunrise
     sandWisps.js      Sand blowing off the high dune crests when the wind can lift it
+    farAway.js        For those who walk the wrong way: a compass in the sand, and a pyramid to climb
     constellations.js Rest your gaze on a constellation and its figure draws itself, then its name
     astronomy.js      Sky positions over Al-Fayoum, dawn times, and the walking-driven sky clock
     props.js          Old tree, palms, shrubs, rocks, grass, flowers (seeded, for the endless desert)

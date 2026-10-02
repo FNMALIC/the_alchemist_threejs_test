@@ -50,12 +50,12 @@ export class Soundscape {
         this.exposureTimer -= delta;
         if (this.exposureTimer <= 0) {
             this.exposureTimer = 0.25;
-            const here = world.heightAt(eye.x, eye.z);
+            const here = world.groundAt(eye.x, eye.z); // On the pyramid's top, too
             let around = 0;
             for (let i = 0; i < 16; i++) {
                 const angle = (i / 8) * Math.PI * 2;
                 const reach = i < 8 ? 12 : 24;
-                around += world.heightAt(eye.x + Math.cos(angle) * reach, eye.z + Math.sin(angle) * reach);
+                around += world.groundAt(eye.x + Math.cos(angle) * reach, eye.z + Math.sin(angle) * reach);
             }
             const target = THREE.MathUtils.clamp((here - around / 16) / 1.4, -1, 1);
             this.exposure += (target - this.exposure) * 0.35;

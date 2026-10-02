@@ -12,7 +12,8 @@
 // there. Their trail is faint at night; the low sun at dawn brings it out.
 //
 // The desert also remembers you (see memory.js): your last walk is still faintly in the sand,
-// and each time you have sat under the tree, a pebble lies beside their stones.
+// each time you have sat under the tree, your own small cairn beside theirs grows by a stone,
+// and after five walks they have left you an answer.
 import * as THREE from 'three';
 import { Horizon } from 'astronomy-engine';
 import { Footprints } from './footprints.js';
@@ -39,7 +40,9 @@ const LETTERS = {
     well: 'The wind took the stars tonight. I walked toward the light because it was the only thing I could see.',
     jar: 'I left the jar here. The light never comes closer, but the sky is changing. Maybe that is enough.',
     turn: 'There was nothing here. Only the morning. I am going home.',
-    home: 'I came back. You were asleep under the tree. I didn\'t wake you.'
+    home: 'I came back. You were asleep under the tree. I didn\'t wake you.',
+    // Only after you have made the walk five times
+    answer: 'I came back and found your stones beside mine. So you walk it too. I hope you stopped by the fire. I hope you didn\'t hurry.'
 };
 // Their way home: east of the straight line, back to the tree
 const HOMEWARD = [
@@ -113,6 +116,12 @@ export class Traces {
             letter(turn, 'turn', 7, stage => stage === 'morning'),
             letter(this.cairn, 'home', 4, stage => stage === 'morning')
         ];
+        // Once you have come back often enough, they have noticed
+        if (memory.journeys >= 5) {
+            this.note(this.cairn.yours.x - 0.3, this.cairn.yours.z + 0.35, -0.5);
+            // Read on the way home, after theirs: you find it when you come back to the tree
+            this.moments.push(letter(this.cairn.yours, 'answer', 4, stage => stage === 'morning'));
+        }
     }
 
     // Faint prints along the path you walked last time
@@ -362,7 +371,7 @@ export class Traces {
     }
 
     // Flat stones balanced one on another: travellers leave these to say "I was here".
-    // Beside them, a pebble for each time you have sat here before.
+    // Beside them, your own small cairn: a stone for each time you have sat here before.
     stackOfStones(x, z, journeys = 0) {
         let y = this.ground(x, z);
         const sizes = [0.22, 0.18, 0.15, 0.12, 0.09];
@@ -375,14 +384,27 @@ export class Traces {
             this.world.add(stone);
             if (i === 0) this.world.colliders.push({ x, z, radius: 0.3 });
         });
-        for (let i = 0; i < Math.min(journeys, 24); i++) {
-            const angle = i * 2.4; // Spiral outward, one pebble per visit
-            const radius = 0.36 + i * 0.03;
-            const pebble = createRock(x + Math.cos(angle) * radius, z + Math.sin(angle) * radius, 0.075, this.heightAt, 0xd2c4ad);
+        // Your stones, one for each walk: a small cairn of your own beside theirs, growing a stone
+        // a visit; past seven, the rest lie around it
+        const yours = { x: x + 0.62, z: z + 0.28 };
+        let top = this.ground(yours.x, yours.z);
+        for (let i = 0; i < Math.min(journeys, 7); i++) {
+            const size = 0.12 - i * 0.009;
+            const stone = createRock(yours.x + (Math.random() - 0.5) * 0.02, yours.z + (Math.random() - 0.5) * 0.02, size, this.heightAt, 0xd2c4ad);
+            stone.scale.set(1, 0.5, 1);
+            stone.position.y = top + size * 0.3;
+            stone.userData.collider = null;
+            top += size * 0.52;
+            this.world.add(stone);
+        }
+        for (let i = 7; i < Math.min(journeys, 30); i++) {
+            const angle = i * 2.4; // Spiralling outward
+            const radius = 0.26 + (i - 7) * 0.025;
+            const pebble = createRock(yours.x + Math.cos(angle) * radius, yours.z + Math.sin(angle) * radius, 0.07, this.heightAt, 0xd2c4ad);
             pebble.scale.set(1, 0.55, 1);
             this.world.add(pebble);
         }
-        return { x, z };
+        return { x, z, yours };
     }
 }
 

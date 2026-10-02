@@ -52,26 +52,35 @@ export class DesertChunks {
         const random = seededRandom(Math.imul(i, 73856093) ^ Math.imul(j, 19349663) ^ 0x9e3779b9);
         const left = this.origin.x + (i - 0.5) * CHUNK_SIZE;
         const top = this.origin.z + (j - 0.5) * CHUNK_SIZE;
-        const point = () => [left + random() * CHUNK_SIZE, top + random() * CHUNK_SIZE];
+        // A spot in this square (null if it falls where nothing should be, e.g. the pyramid)
+        const point = () => {
+            const spot = [left + random() * CHUNK_SIZE, top + random() * CHUNK_SIZE];
+            return world.isReserved(spot[0], spot[1]) ? null : spot;
+        };
 
         withRandom(random, () => {
             const rocks = Math.floor(random() * 2.3);
             for (let n = 0; n < rocks; n++) {
-                const [x, z] = point();
+                const spot = point();
+                if (!spot) continue;
+                const [x, z] = spot;
                 chunk.objects.push(world.add(createRock(x, z, 0.3 + random() * 0.9, heightAt, ROCK_COLOR)));
             }
 
             const shrubs = Math.floor(random() * 2.6);
             for (let n = 0; n < shrubs; n++) {
-                const [x, z] = point();
+                const spot = point();
+                if (!spot) continue;
+                const [x, z] = spot;
                 const plant = { object: world.add(createShrub(x, z, heightAt)), kind: 'shrub' };
                 chunk.plants.push(plant);
                 this.onAddPlant?.(plant);
             }
 
             // Now and then a landmark: a cluster of large rocks
-            if (random() < 0.07) {
-                const [cx, cz] = point();
+            const outcrop = point();
+            if (random() < 0.07 && outcrop) {
+                const [cx, cz] = outcrop;
                 const count = 4 + Math.floor(random() * 3);
                 for (let n = 0; n < count; n++) {
                     const x = cx + (random() - 0.5) * 8;
