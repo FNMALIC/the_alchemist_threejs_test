@@ -145,6 +145,55 @@ export class Traces {
         return path;
     }
 
+    // A friend's walk (from a shared link): their footprints, fresher than the traveller's
+    layFriendWalk(points) {
+        if (points.length < 2) return [];
+        this.friendTrail = new Footprints(this.groundAt, null, { ageing: false, strength: 0.7, name: 'friend' });
+        this.world.scene.add(this.friendTrail.mesh);
+        let foot = 1;
+        const path = points.map(([x, z]) => ({ x, z }));
+        for (let i = 1; i < path.length; i++) {
+            const a = path[i - 1], b = path[i];
+            const length = Math.hypot(b.x - a.x, b.z - a.z);
+            if (length > 40) continue; // A jump in the path (e.g. walking again): no prints across it
+            const heading = Math.atan2(b.x - a.x, b.z - a.z);
+            for (let d = 0; d < length; d += STEP_LENGTH) {
+                foot = -foot;
+                if (Math.random() < 0.15) continue; // A few already taken by the wind
+                const t = d / length;
+                this.friendTrail.add({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t, heading, foot, lift: 0.03 });
+            }
+        }
+        return path;
+    }
+
+    // Something left for the next traveller: a note under a stone, or a small photograph
+    leaveMessage({ x, z, picture }) {
+        if (!picture) {
+            this.note(x, z, Math.random() * Math.PI * 2);
+            return;
+        }
+        const y = this.ground(x, z);
+        const texture = new THREE.TextureLoader().load(picture);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        const turn = Math.random() * Math.PI * 2;
+        // A white border, and the picture on it
+        const border = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.24).rotateX(-Math.PI / 2),
+            new THREE.MeshStandardMaterial({ color: 0xf2eee4, roughness: 0.8 }));
+        border.position.set(x, y + 0.02, z);
+        border.rotation.y = turn;
+        border.receiveShadow = true;
+        this.world.add(border);
+        const photo = new THREE.Mesh(new THREE.PlaneGeometry(0.17, 0.17).rotateX(-Math.PI / 2),
+            new THREE.MeshStandardMaterial({ map: texture, roughness: 0.6 }));
+        photo.position.set(0, 0.002, -0.012);
+        photo.receiveShadow = true;
+        border.add(photo);
+        const stone = createRock(x + 0.07, z - 0.08, 0.045, this.heightAt, 0x7a6a5a);
+        stone.position.y = y + 0.04;
+        this.world.add(stone);
+    }
+
     // A scrap of paper, folded once, held down by a small stone
     note(x, z, turn) {
         const y = this.ground(x, z);

@@ -56,15 +56,16 @@ export function saveMemory(memory) {
 
 // Records where you walk, a point every couple of metres
 export class PathRecorder {
-    constructor(spacing = 2) {
+    constructor(spacing = 2, maxPoints = MAX_POINTS) {
         this.spacing = spacing;
+        this.maxPoints = maxPoints;
         this.points = []; // [x, z] pairs
     }
 
     add(x, z) {
         const last = this.points[this.points.length - 1];
         if (last && Math.hypot(x - last[0], z - last[1]) < this.spacing) return;
-        if (this.points.length >= MAX_POINTS) return;
+        if (this.points.length >= this.maxPoints) return;
         this.points.push([Math.round(x * 10) / 10, Math.round(z * 10) / 10]);
     }
 }

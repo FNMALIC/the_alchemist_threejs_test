@@ -73,7 +73,10 @@ export class PlayerController extends EventDispatcher {
             this.dispatchEvent({ type: 'land', strength });
         };
 
+        // Keys typed into a text box (a note for the next traveller) are words, not steps
+        const typing = event => event.target instanceof HTMLElement && event.target.closest('input, textarea');
         document.addEventListener('keydown', event => {
+            if (typing(event)) return;
             this.setKey(event.code, true);
             if (event.code === 'Space') this.jump();
         });

@@ -8,14 +8,21 @@ export class Moments {
     constructor(storyText, moments, currentStage = () => null) {
         this.storyText = storyText;
         this.currentStage = currentStage;
-        this.pending = moments.map(moment => ({
+        this.pending = [];
+        moments.forEach(moment => this.add(moment));
+        this.timer = 0;
+    }
+
+    // One more, e.g. something a friend left (see messages.js)
+    add(moment) {
+        this.pending.push({
             test: moment.test ?? ((x, z) => Math.hypot(x - moment.x, z - moment.z) < moment.radius),
             when: moment.when ?? (() => true),
             text: moment.text,
             style: moment.style,
+            picture: moment.picture ?? null,
             duration: moment.duration ?? 5
-        }));
-        this.timer = 0;
+        });
     }
 
     update(delta, x, z) {
@@ -28,7 +35,7 @@ export class Moments {
         const found = this.pending.findIndex(moment => moment.when(stage) && moment.test(x, z));
         if (found < 0) return;
         const moment = this.pending[found];
-        this.storyText.show(moment.text, moment.duration, moment.style);
+        this.storyText.show(moment.text, moment.duration, moment.style, moment.picture);
         this.pending.splice(found, 1);
     }
 }
