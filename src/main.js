@@ -13,6 +13,7 @@ import { Moments } from './moments.js';
 import { Traces } from './world/traces.js';
 import { Constellations } from './world/constellations.js';
 import { Soundscape } from './soundscape.js';
+import { Messages } from './messages.js';
 import { Storm } from './storm.js';
 import { loadMemory, saveMemory, PathRecorder, skyOfThisVisit, returnLine } from './memory.js';
 import { Body } from 'astronomy-engine';
@@ -113,6 +114,7 @@ const morningStar = horizontalPosition(Body.Venus, new Date(world.sky.clock.end 
 const thisVisit = skyOfThisVisit(world.sky, morningStar);
 const soundscape = new Soundscape(music, world, traces); // Silence, crests and hollows, singing dunes
 const pathRecorder = new PathRecorder();
+const walkRecorder = new PathRecorder(3, 900); // Your whole walk, for sharing it
 const storm = new Storm();
 
 // The world noticing the player: sand under the feet, shrubs and flowers that move as you pass
@@ -203,15 +205,22 @@ const moments = new Moments(storyText, [
     ...traces.moments
 ], () => story.current);
 
+// Leave something for the next traveller (N), share your walk; or find what a friend left
+const messages = new Messages({ player, traces, storyText, moments, path: () => walkRecorder.points });
+messages.receive(onTheWay).then(found => {
+    if (found) storyState.returnLine = 'Someone walked here before you. They left you something.';
+});
+
 document.addEventListener('keydown', event => {
     // E is also for interacting: it only means "sit" when nothing is in focus
-    if (event.code === 'KeyE' && story.current === 'morning' && !player.interaction.target) storyState.wantsToSit = true;
+    if (event.code === 'KeyE' && player.isLocked && story.current === 'morning' && !player.interaction.target) storyState.wantsToSit = true;
 });
 
 // On a phone or tablet: how to walk with fingers, and the prompts can be tapped
 if (player.touch) {
     document.body.classList.add('touch');
-    ui.instructions.innerHTML = 'Tap to start<br>Hold the left side to walk (slide up to hurry) · Drag the right side to look';
+    ui.instructions.innerHTML = 'Tap to start<br>Hold the left side to walk (slide up to hurry) · Drag the right side to look<br>' +
+        '"Leave something" leaves a note or a picture for whoever walks here after you';
 }
 
 // On a phone: look by turning it, if you like (iPhones ask permission, from this tap)
@@ -232,7 +241,7 @@ tiltToggle.addEventListener('click', async () => {
 let wakeLock = null;
 document.addEventListener('click', event => {
     // Let the UI controls be used without grabbing the mouse
-    if (event.target.closest('#audio-controls, #restart-button, #tilt-toggle')) return;
+    if (event.target.closest('#audio-controls, #restart-button, #tilt-toggle, #leave, #leave-button, #share-button, #share-link')) return;
 
     if (!player.isLocked) {
         player.lock();
@@ -254,6 +263,7 @@ player.pointerLock.addEventListener('lock', () => {
     // This visit counts once it has begun (its sky is compared with the next one's)
     if (!visitRemembered) {
         visitRemembered = true;
+        document.body.classList.add('walked'); // Now there is a walk to share
         saveMemory({ journeys: memory.journeys, path: memory.path, lastVisit: thisVisit });
     }
     ui.instructions.classList.add('hidden');
@@ -312,6 +322,7 @@ function animate() {
     storyText.update(delta);
     moments.update(delta, camera.position.x, camera.position.z);
     if (['night', 'crossing'].includes(story.current)) pathRecorder.add(player.eye.x, player.eye.z);
+    if (visitRemembered && !player.seated) walkRecorder.add(player.eye.x, player.eye.z);
 
     // The storm, partway across: it thickens the air, roars over the music and pushes you
     const stormIntensity = storm.update(delta, distanceWalked, storyState.distanceToOrb, story.current === 'crossing');
@@ -368,7 +379,7 @@ renderer.renderer.setAnimationLoop(animate);
 if (import.meta.env.DEV) {
     window.mirage = {
         scene, camera, player, orb, world, story, storyState, renderer: renderer.renderer,
-        music, audio, traces, debug, storm, constellations, rendering: renderer, soundscape, crestSeat,
+        music, audio, traces, debug, storm, constellations, rendering: renderer, soundscape, crestSeat, messages, moments,
         interaction: player.interaction,
         environment,
         get testInteractables() { return testInteractables; }

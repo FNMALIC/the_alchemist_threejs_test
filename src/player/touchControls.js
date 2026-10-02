@@ -65,7 +65,7 @@ export class TouchControls {
 
     start(event) {
         if (!this.player.isLocked) return; // The first tap starts the experience (see main.js)
-        if (event.target.closest?.('#hint, #pause-hint, #interaction-prompt, #restart-button')) return;
+        if (event.target.closest?.('#hint, #pause-hint, #interaction-prompt, #restart-button, #leave-button, #leave, #share-button, #share-link')) return;
         event.preventDefault();
         for (const touch of event.changedTouches) {
             if (touch.clientX < window.innerWidth / 2 && !this.walkTouch) {

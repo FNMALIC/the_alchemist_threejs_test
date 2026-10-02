@@ -39,7 +39,7 @@ export class StoryText {
     constructor(element) {
         this.element = element;
         this.remaining = 0;
-        this.pending = null; // { text, duration, style } waiting for the previous line to fade out
+        this.pending = null; // { text, duration, style, picture } waiting for the previous line to fade out
         this.swapTimer = 0;
     }
 
@@ -48,20 +48,27 @@ export class StoryText {
     }
 
     // style: optional CSS class, e.g. 'letter' for the traveller's handwriting
-    show(text, duration = 3, style = null) {
+    // picture: optional image (a URL) shown under the text, e.g. one a friend left
+    show(text, duration = 3, style = null, picture = null) {
         if (this.element.classList.contains('visible')) {
             // Let the current line fade out first, then bring in the new one
             this.element.classList.remove('visible');
-            this.pending = { text, duration, style };
+            this.pending = { text, duration, style, picture };
             this.swapTimer = SWAP_SECONDS;
             this.remaining = 0;
             return;
         }
-        this.reveal(text, duration, style);
+        this.reveal(text, duration, style, picture);
     }
 
-    reveal(text, duration, style) {
+    reveal(text, duration, style, picture = null) {
         this.element.textContent = text;
+        if (picture) {
+            const image = document.createElement('img');
+            image.src = picture;
+            image.alt = '';
+            this.element.appendChild(image);
+        }
         this.element.classList.toggle('letter', style === 'letter');
         this.element.classList.add('visible');
         this.remaining = duration;
@@ -71,9 +78,9 @@ export class StoryText {
         if (this.pending) {
             this.swapTimer -= delta;
             if (this.swapTimer <= 0) {
-                const { text, duration, style } = this.pending;
+                const { text, duration, style, picture } = this.pending;
                 this.pending = null;
-                this.reveal(text, duration, style);
+                this.reveal(text, duration, style, picture);
             }
             return;
         }
