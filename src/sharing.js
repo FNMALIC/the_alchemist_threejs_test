@@ -1,8 +1,10 @@
 // sharing.js - Your walk, in a link. Whoever opens it walks the same desert and finds your
 // footprints and the few things you left on the way: some lines of writing, a picture.
 //
-// Everything travels in the link's #fragment (never sent to any server): the path, the notes,
-// and small pictures, packed as JSON and compressed. Nothing is stored anywhere else.
+// The walk (the path, the notes, small pictures) is packed as JSON and compressed. If the site
+// has its storage connected (api/walk.js), it is saved there for 30 days and the link is short:
+// /#w=<id>. Otherwise everything travels in the link itself (/#walk=..., never sent to any
+// server), which works anywhere but is long.
 // Pictures are what make a link long, so they are kept small: faded, sepia photographs (as an
 // old picture left in the sand would be), WebP where the browser can make it, JPEG otherwise,
 // and a picture left twice is carried once.
@@ -15,6 +17,7 @@ const PICTURE_SIDE = 128; // Pixels on the longer side
 const PICTURE_QUALITY = 0.5;
 const PICTURE_PATTERN = /^data:image\/(jpeg|webp);base64,[A-Za-z0-9+/=]+$/;
 const PREFIX = '#walk=';
+const SHORT_PREFIX = '#w=';
 
 // --- Bytes <-> base64url, and (de)compression where the browser can ---
 
@@ -70,7 +73,28 @@ export async function shrinkPicture(file) {
 // --- Walks <-> links ---
 
 // path: [[x, z], ...]; notes: [{ x, z, text, picture (data URL or null) }]
+// A short link if the walk can be saved online, else the long link with everything in it
 export async function linkForWalk(path, notes) {
+    const packed = await packWalk(path, notes);
+    const base = `${location.origin}${location.pathname}`;
+    try {
+        const response = await fetch('/api/walk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ walk: packed })
+        });
+        if (response.ok) {
+            const { id } = await response.json();
+            if (typeof id === 'string' && /^[A-Za-z0-9]{8}$/.test(id)) return `${base}${SHORT_PREFIX}${id}`;
+        }
+    } catch {
+        // No storage here (or offline): the long link still works
+    }
+    return `${base}${PREFIX}${packed}`;
+}
+
+// The walk as text: a packing letter ('z' compressed, 'j' plain), then base64url
+async function packWalk(path, notes) {
     const walk = {
         v: 1,
         // Half-metre steps, each point as the change from the last: compresses very well
@@ -93,16 +117,32 @@ export async function linkForWalk(path, notes) {
         bytes = await pipe(bytes, new CompressionStream('deflate-raw'));
         packing = 'z';
     }
-    const base = `${location.origin}${location.pathname}`;
-    return `${base}${PREFIX}${packing}${toBase64Url(bytes)}`;
+    return `${packing}${toBase64Url(bytes)}`;
 }
 
-// The walk in this page's link, or null. Never trusts it: anything odd is dropped.
+// The walk in this page's link (fetched first, for a short link), or null
 export async function walkFromLink(hash = location.hash) {
+    if (hash.startsWith(SHORT_PREFIX)) {
+        const id = hash.slice(SHORT_PREFIX.length);
+        if (!/^[A-Za-z0-9]{8}$/.test(id)) return null;
+        try {
+            const response = await fetch(`/api/walk?id=${id}`);
+            if (!response.ok) return null;
+            const { walk } = await response.json();
+            return typeof walk === 'string' ? unpackWalk(walk) : null;
+        } catch {
+            return null;
+        }
+    }
     if (!hash.startsWith(PREFIX)) return null;
+    return unpackWalk(hash.slice(PREFIX.length));
+}
+
+// A packed walk back into { path, notes }. Never trusts it: anything odd is dropped.
+async function unpackWalk(packed) {
     try {
-        const packing = hash[PREFIX.length];
-        let bytes = fromBase64Url(hash.slice(PREFIX.length + 1));
+        const packing = packed[0];
+        let bytes = fromBase64Url(packed.slice(1));
         if (packing === 'z') bytes = await pipe(bytes, new DecompressionStream('deflate-raw'));
         else if (packing !== 'j') return null;
         const walk = JSON.parse(new TextDecoder().decode(bytes));

@@ -33,8 +33,11 @@ Headphones recommended.
 **Leaving something for the next traveller:** press N (or tap "Leave something" on a phone) to leave
 a few lines and, if you like, a picture, right where you stand (up to three). When you stop (Esc)
 or at the end, "Share your walk" makes a link. Whoever opens it walks the same desert and finds your
-footprints, your notes under stones and your pictures in the sand. Everything is inside the link;
-nothing is stored anywhere else.
+footprints, your notes under stones and your pictures in the sand.
+
+Short links (`/#w=k7f2a9qx`) need the project's Redis database (Vercel → Storage → Redis, connected to
+the project, which sets `REDIS_URL`): `api/walk.js` saves each shared walk there for 30 days. Without
+it, the game falls back to long links that carry the whole walk themselves (`/#walk=...`).
 
 **On a phone or tablet:** tap to start, hold the left side of the screen to walk (slide your thumb
 up to hurry, down to step back, sideways to step aside), drag on the right side to look around,
@@ -100,7 +103,9 @@ src/
                       the crest whistle, the singing dune and the jackal
   soundscape.js       Places of silence, crests and hollows, singing dunes, the one jackal
   messages.js         Leave notes and pictures for the next traveller; share your walk; find a friend's
-  sharing.js          A walk in a link: path, notes and small pictures, compressed into the #fragment
+  sharing.js          A walk in a link: path, notes and small pictures, compressed; short links via api/walk.js
+api/
+  walk.js             Vercel function: saves a shared walk in Redis for 30 days, gives it back by its id
   data/stars.json     5,070 naked-eye stars (generated, see below)
   world/
     world.js          Puts the world together: oasis, desert, lights, fog

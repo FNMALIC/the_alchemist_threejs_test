@@ -227,7 +227,7 @@ The journey matters more than the destination. Very few words; the world tells t
 - [x] Leave up to three things on your walk (N, or "Leave something" on a phone): a few lines, and a picture from your device if you like, shrunk to a small photograph lying in the sand under a stone
 - [x] "Share your walk" (when you stop, and at the end): a link with your path and what you left; phones open their share sheet, elsewhere it is copied
 - [x] Opening the link: your friend's desert has your footprints across it, your notes and pictures where you left them (read as letters, with the picture), and a first line: "Someone walked here before you. They left you something."
-- [x] No server: everything travels in the link's #fragment, compressed; what comes in is checked (plain text, small JPEG pictures only)
+- [x] Short links: a shared walk is saved for 30 days in the project's Redis (api/walk.js) and the link is just /#w=<id>; without storage, a long link carries everything itself; what comes in is checked (plain text, small WebP/JPEG pictures only)
 
 ## Next ideas
 
